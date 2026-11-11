@@ -134,9 +134,9 @@ export function VendorDetail({
         ) : shown.length === 0 ? (
           <EmptyState icon="search" title="لا توجد نتائج" />
         ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="flex flex-col gap-2">
             {shown.map((c) => (
-              <CaseCard key={c.id} c={c} fieldMic={fieldMic} parseDate={parseDate} />
+              <CaseCard key={c.id} c={c} compact fieldMic={fieldMic} parseDate={parseDate} />
             ))}
           </div>
         )}

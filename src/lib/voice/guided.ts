@@ -28,6 +28,7 @@ export type GuidedAction =
   | { type: "speech"; text: string }
   | { type: "command"; command: VoiceCommand }
   | { type: "setField"; field: CaseField; value: string }
+  | { type: "setValues"; values: Record<CaseField, string>; transcript?: string[] }
   | { type: "goto"; step: number }
   | { type: "reset" };
 
@@ -85,6 +86,8 @@ export function guidedReducer(s: GuidedState, a: GuidedAction): GuidedState {
       return applyCommand(s, a.command);
     case "setField":
       return { ...s, values: { ...s.values, [a.field]: a.value } };
+    case "setValues":
+      return { ...s, values: { ...a.values }, transcript: a.transcript ?? s.transcript };
     case "goto":
       return { ...s, step: Math.max(0, Math.min(a.step, REVIEW_STEP)) };
     case "reset":

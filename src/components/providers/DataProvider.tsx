@@ -35,6 +35,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (demo) {
+      // LocalRepo needs window/localStorage, so it can only be created after mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAuth({ status: "signedIn", user: DEMO_USER, repo: new LocalRepo() });
       return;
     }

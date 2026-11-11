@@ -22,10 +22,13 @@ export function CaseCard({
   highlight = false,
   fieldMic,
   parseDate,
+  compact = false,
 }: {
   c: Case;
   vendorName?: string;
   highlight?: boolean;
+  /** Start as a one-line summary that expands on tap (long history lists). */
+  compact?: boolean;
   fieldMic?: FieldMicRenderer;
   /** Turns re-dictated date speech into ISO. */
   parseDate?: (text: string) => string | null;
@@ -34,6 +37,7 @@ export function CaseCard({
   const { track, notify } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [expanded, setExpanded] = useState(!compact);
 
   function save(patch: CasePatch): boolean {
     const next = { ...c, ...patch };
@@ -59,6 +63,29 @@ export function CaseCard({
 
   const duration = c.endDate ? daysBetween(c.startDate, c.endDate) : null;
 
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        aria-expanded={false}
+        className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-start shadow-sm hover:border-teal-300"
+      >
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${c.status === "open" ? "bg-amber-500" : "bg-emerald-500"}`} aria-label={c.status === "open" ? "مفتوحة" : "مغلقة"} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-semibold text-slate-900">{c.case}</span>
+          <span className="block truncate text-xs text-slate-500">
+            {vendorName && <>{vendorName} · </>}
+            <span className="ltr-nums">{formatDMY(c.startDate)}{c.endDate ? ` → ${formatDMY(c.endDate)}` : ""}</span>
+            {c.taskBar && <> · {c.taskBar}</>}
+          </span>
+        </span>
+        {c.audioUrl && <Icon name="play" className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
+        <Icon name="chevron" className="h-4 w-4 shrink-0 -rotate-90 text-slate-400" />
+      </button>
+    );
+  }
+
   return (
     <article
       className={`rounded-2xl border bg-white p-4 shadow-sm ${highlight ? "border-teal-400 ring-2 ring-teal-100" : "border-slate-200"}`}
@@ -68,6 +95,11 @@ export function CaseCard({
         {duration !== null && <span className="text-xs text-slate-500">{duration} يوم</span>}
         {vendorName && <span className="text-xs font-semibold text-slate-600">{vendorName}</span>}
         <div className="ms-auto flex items-center gap-1">
+          {compact && (
+            <Button variant="ghost" size="sm" onClick={() => setExpanded(false)} aria-expanded>
+              طي
+            </Button>
+          )}
           {c.transcript && (
             <Button variant="ghost" size="sm" onClick={() => setShowTranscript((s) => !s)}>
               {showTranscript ? "إخفاء النص" : "النص المسموع"}
