@@ -98,7 +98,7 @@ export function formatMonthKey(key: string): string {
   return `${MONTHS_SHORT[m - 1]} ${y}`;
 }
 
-/** Monday-based start of week (Egyptian work week starts Sunday; see below). */
+/** Start of the week containing `iso` (default Sunday, the Egyptian work week). */
 export function startOfWeek(iso: string, weekStartsOn = 0 /* 0 = Sunday */): string {
   const p = parseISO(iso)!;
   const dow = new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay();

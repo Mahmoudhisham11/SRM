@@ -1,15 +1,16 @@
 "use client";
 
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
+import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
 import {
+  connectFirestoreEmulator,
   getFirestore,
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
   type Firestore,
 } from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
+import { connectStorageEmulator, getStorage, type FirebaseStorage } from "firebase/storage";
 
 // NEXT_PUBLIC_* values are inlined at build time, so they must be referenced literally.
 const config = {
@@ -23,6 +24,9 @@ const config = {
 
 /** Without Firebase env vars the app runs in demo mode (data in this browser only). */
 export const isFirebaseConfigured = Boolean(config.apiKey && config.projectId && config.appId);
+
+/** Local development against `firebase emulators:start` (see README). */
+const useEmulators = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "1";
 
 interface FirebaseServices {
   app: FirebaseApp;
@@ -49,6 +53,13 @@ export function getFirebase(): FirebaseServices {
   } catch {
     db = getFirestore(app); // already initialized (fast refresh)
   }
-  services = { app, auth: getAuth(app), db, storage: getStorage(app) };
+  const auth = getAuth(app);
+  const storage = getStorage(app);
+  if (useEmulators && fresh) {
+    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    connectFirestoreEmulator(db, "127.0.0.1", 8080);
+    connectStorageEmulator(storage, "127.0.0.1", 9199);
+  }
+  services = { app, auth, db, storage };
   return services;
 }

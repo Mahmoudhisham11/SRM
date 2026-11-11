@@ -43,8 +43,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const { auth: fbAuth, db, storage } = getFirebase();
     let unsub = () => {};
     // Lazy-load auth listener; also completes a redirect sign-in if one is pending.
-    import("firebase/auth").then(({ onAuthStateChanged, getRedirectResult }) => {
+    import("firebase/auth").then(({ onAuthStateChanged, getRedirectResult, GoogleAuthProvider, signInWithCredential }) => {
       getRedirectResult(fbAuth).catch(() => undefined);
+      if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "1") {
+        // Emulator-only hook for automated tests (the Auth emulator accepts
+        // unsigned fake Google credentials). Never present in production builds.
+        (window as unknown as Record<string, unknown>).__emulatorSignIn = (email: string) =>
+          signInWithCredential(fbAuth, GoogleAuthProvider.credential(JSON.stringify({ sub: email, email, email_verified: true, name: email.split("@")[0] })));
+      }
       unsub = onAuthStateChanged(fbAuth, (u) => {
         if (!u) return setAuth({ status: "signedOut" });
         setAuth({
