@@ -267,6 +267,10 @@ export const MESSAGES = {
   "settings.account": { ar: "الحساب", en: "Account" },
   "settings.signOut": { ar: "تسجيل الخروج", en: "Sign out" },
   "settings.demo": { ar: "الحساب: وضع تجريبي على الجهاز ده", en: "Account: demo mode on this device" },
+  "settings.appInstall": { ar: "تثبيت التطبيق", en: "Install App" },
+  "settings.appInstallBtn": { ar: "تثبيت كبرنامج على الهاتف", en: "Install on Device" },
+  "settings.appInstalled": { ar: "التطبيق يعمل كبرنامج مثبت على هذا الجهاز", en: "App is running as an installed application" },
+  "settings.appInstallIosHint": { ar: "على الآيفون: اضغط زر المشاركة (Share) في Safari ثم «إضافة إلى الشاشة الرئيسية»", en: "On iPhone: tap Share in Safari, then 'Add to Home Screen'" },
 } satisfies Record<string, Entry>;
 
 export type MessageKey = keyof typeof MESSAGES;

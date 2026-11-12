@@ -13,14 +13,28 @@ export const metadata: Metadata = {
   title: "SRM Voice Log",
   description: "Log supplier-relationship work by voice — Arabic & English",
   applicationName: "SRM Voice Log",
-  icons: { icon: "/icon.svg" },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "SRM Voice",
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#fcf6f1",
+  themeColor: "#962b5b",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

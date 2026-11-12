@@ -1,12 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { LogOut } from "lucide-react";
+import { Download, LogOut, Smartphone } from "lucide-react";
 import { TopBar, DesktopHeader } from "@/components/AppShell";
 import { useData } from "@/components/providers/DataProvider";
 import { Button, Segmented } from "@/components/ui";
 import { useI18n } from "@/lib/i18n/useI18n";
 import { useDictationLang, useDisplayName, useGender, useLang, useThemePref, type DictationLang, type ThemePref } from "@/hooks/useVoicePrefs";
+import { usePwaInstall } from "@/hooks/usePwaInstall";
 import type { Gender, Lang } from "@/lib/i18n/messages";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -26,6 +27,7 @@ export function SettingsPage() {
   const [theme, setTheme] = useThemePref();
   const [gender, setGender] = useGender();
   const [dictation, setDictation] = useDictationLang();
+  const { canInstall, isInstalled, triggerInstall } = usePwaInstall();
   const user = auth.status === "signedIn" ? auth.user : null;
 
   return (
@@ -86,6 +88,23 @@ export function SettingsPage() {
               { value: "en-US", label: t("settings.dictation.en") },
             ]}
           />
+        </Row>
+        <Row label={t("settings.appInstall")}>
+          {isInstalled ? (
+            <p className="flex items-center gap-2 text-sm font-medium text-closed">
+              <Smartphone className="h-4 w-4" />
+              {t("settings.appInstalled")}
+            </p>
+          ) : canInstall ? (
+            <Button variant="primary" size="sm" onClick={() => triggerInstall()}>
+              <Download className="h-4 w-4" />
+              {t("settings.appInstallBtn")}
+            </Button>
+          ) : (
+            <p className="text-xs text-ink-3">
+              {t("settings.appInstallIosHint")}
+            </p>
+          )}
         </Row>
         <Row label={t("settings.account")}>
           {demo ? (
