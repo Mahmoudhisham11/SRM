@@ -10,6 +10,8 @@ export type Unsubscribe = () => void;
  */
 export interface DataRepo {
   readonly kind: "firestore" | "local";
+  /** Whether original recordings can be stored (Storage set up). */
+  readonly audioEnabled: boolean;
 
   watchVendors(onData: (vendors: Vendor[]) => void, onError: (e: Error) => void): Unsubscribe;
   /** All cases, or only one vendor's. */

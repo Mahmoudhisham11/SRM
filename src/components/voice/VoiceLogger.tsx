@@ -55,7 +55,10 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
   const name = useGreetingName();
   const [year, setYear] = useDefaultYear();
   const [mode, setMode] = useVoiceMode();
-  const [recordAudio, setRecordAudio] = useRecordAudio();
+  const [recordAudioPref, setRecordAudio] = useRecordAudio();
+  // Recording only makes sense where it can be stored (Storage set up / demo mode).
+  const audioAvailable = repo.audioEnabled && isRecordingSupported();
+  const recordAudio = recordAudioPref && audioAvailable;
   const [dictation] = useDictationLang();
   const [sessionCount, bumpSessionCount] = useSessionCount();
   const ctx = useMemo(() => ({ defaultYear: year }), [year]);
@@ -169,10 +172,20 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
       if (rec?.active) {
         const blob = await rec.finish();
         if (speech.current) void startClip();
-        if (blob) repo.uploadAudio(id, blob).catch(() => notify(t("voice.audioUploadFailed"), "error"));
+        if (blob) {
+          repo.uploadAudio(id, blob).catch((e) => {
+            const code = String((e as { code?: string })?.code ?? "");
+            // Storage not set up for this project → stop recording instead of failing every case.
+            if (/bucket-not-found|project-not-found|storage\/unknown|storage\/disabled|unauthorized/.test(code)) {
+              setRecordAudio(false);
+              releaseAudio();
+              notify(t("voice.audioStorageOff"), "info");
+            } else notify(t("voice.audioUploadFailed"), "error");
+          });
+        }
       }
     },
-    [ctx, notify, track, repo, vendor.id, startClip, t, name, sessionCount, bumpSessionCount],
+    [ctx, notify, track, repo, vendor.id, startClip, t, name, sessionCount, bumpSessionCount, setRecordAudio, releaseAudio],
   );
 
   const saveFree = useCallback(async () => {
@@ -461,7 +474,7 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
             ))}
           </select>
         </label>
-        {supported && isRecordingSupported() && (
+        {supported && audioAvailable && (
           <button
             type="button"
             role="switch"

@@ -1,69 +1,66 @@
 rules_version = '2';
 
-// Each user can read and write ONLY their own data under users/{uid}.
-// Writes are also validated so a buggy client can't store malformed cases.
+// SRM Voice Log — Firestore rules.
+//
+// All app data lives under srmVoiceLog/{uid}/… and each signed-in user can
+// read and write ONLY their own folder. Writes are validated too.
+//
+// Sharing a Firebase project with another app? Do NOT replace that app's rules:
+// copy just the `match /srmVoiceLog/{uid} { … }` block below into your existing
+// `match /databases/{database}/documents { … }`. It is self-contained and only
+// touches the srmVoiceLog collection. (Anything without an allow rule is denied.)
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isOwner(uid) {
-      return request.auth != null && request.auth.uid == uid;
-    }
+    match /srmVoiceLog/{uid} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+      function isISODate(v) {
+        return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+      }
+      function isText(v, max) {
+        return v is string && v.size() <= max;
+      }
+      function validVendor(d) {
+        return d.keys().hasOnly(['nameAr', 'nameEn', 'code', 'contact', 'notes', 'createdAt', 'updatedAt'])
+          && d.keys().hasAll(['nameAr', 'nameEn', 'code', 'createdAt', 'updatedAt'])
+          && isText(d.nameAr, 200) && isText(d.nameEn, 200)
+          && (d.nameAr.size() > 0 || d.nameEn.size() > 0)
+          && isText(d.code, 50)
+          && isText(d.get('contact', ''), 500) && isText(d.get('notes', ''), 5000)
+          && d.createdAt is number && d.updatedAt is number;
+      }
+      function validCase(d) {
+        let endDate = d.get('endDate', null);
+        return d.keys().hasOnly(['vendorId', 'case', 'taskBar', 'startDate', 'endDate', 'comments',
+                                 'status', 'audioUrl', 'transcript', 'createdAt', 'updatedAt'])
+          && d.keys().hasAll(['vendorId', 'case', 'startDate', 'status', 'createdAt', 'updatedAt'])
+          && d.vendorId is string && d.vendorId.size() > 0
+          && isText(d.case, 2000) && d.case.size() > 0
+          && isText(d.get('taskBar', ''), 2000)
+          && isText(d.get('comments', ''), 10000)
+          && isText(d.get('transcript', ''), 20000)
+          && isISODate(d.startDate)
+          // End Date is optional; when present it can't be before Start Date
+          // (ISO strings compare correctly as text).
+          && (endDate == null || (isISODate(endDate) && endDate >= d.startDate))
+          // status is derived: closed exactly when End Date is set
+          && d.status == (endDate == null ? 'open' : 'closed')
+          && (d.get('audioUrl', null) == null || isText(d.audioUrl, 2000))
+          && d.createdAt is number && d.updatedAt is number;
+      }
 
-    function isISODate(v) {
-      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-    }
-
-    function isText(v, max) {
-      return v is string && v.size() <= max;
-    }
-
-    function validVendor(d) {
-      return d.keys().hasOnly(['nameAr', 'nameEn', 'code', 'contact', 'notes', 'createdAt', 'updatedAt'])
-        && d.keys().hasAll(['nameAr', 'nameEn', 'code', 'createdAt', 'updatedAt'])
-        && isText(d.nameAr, 200) && isText(d.nameEn, 200)
-        && (d.nameAr.size() > 0 || d.nameEn.size() > 0)
-        && isText(d.code, 50)
-        && isText(d.get('contact', ''), 500) && isText(d.get('notes', ''), 5000)
-        && d.createdAt is number && d.updatedAt is number;
-    }
-
-    function validCase(d) {
-      let endDate = d.get('endDate', null);
-      return d.keys().hasOnly(['vendorId', 'case', 'taskBar', 'startDate', 'endDate', 'comments',
-                               'status', 'audioUrl', 'transcript', 'createdAt', 'updatedAt'])
-        && d.keys().hasAll(['vendorId', 'case', 'startDate', 'status', 'createdAt', 'updatedAt'])
-        && d.vendorId is string && d.vendorId.size() > 0
-        && isText(d.case, 2000) && d.case.size() > 0
-        && isText(d.get('taskBar', ''), 2000)
-        && isText(d.get('comments', ''), 10000)
-        && isText(d.get('transcript', ''), 20000)
-        && isISODate(d.startDate)
-        // End Date is optional; when present it can't be before Start Date
-        // (ISO strings compare correctly as text).
-        && (endDate == null || (isISODate(endDate) && endDate >= d.startDate))
-        // status is derived: closed exactly when End Date is set
-        && d.status == (endDate == null ? 'open' : 'closed')
-        && (d.get('audioUrl', null) == null || isText(d.audioUrl, 2000))
-        && d.createdAt is number && d.updatedAt is number;
-    }
-
-    match /users/{uid} {
-      allow read, write: if isOwner(uid);
+      allow read, write: if isOwner();
 
       match /vendors/{vendorId} {
-        allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) && validVendor(request.resource.data);
+        allow read, delete: if isOwner();
+        allow create, update: if isOwner() && validVendor(request.resource.data);
       }
-
       match /cases/{caseId} {
-        allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) && validCase(request.resource.data);
+        allow read, delete: if isOwner();
+        allow create, update: if isOwner() && validCase(request.resource.data);
       }
-    }
-
-    // Everything else is closed.
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }

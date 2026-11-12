@@ -45,7 +45,7 @@ Open http://localhost:3000 in **Chrome or Edge**. Without Firebase settings the 
 3. **Firestore Database** → *Create database* → **production mode**. Pick a nearby location, e.g. `europe-west1` or `me-central1`.
 4. **Storage** → *Get started*. This holds the original audio clips.
    > Cloud Storage for Firebase needs the **Blaze (pay-as-you-go)** plan on new projects. It still has a free monthly allowance, and short voice clips are tiny (≈ 5–15 KB per case).
-   > If you'd rather stay on the free Spark plan, skip Storage and untick «احفظ الصوت الأصلي» in the logger. Everything else works without it.
+   > If you'd rather stay on the free Spark plan, skip Storage and set `NEXT_PUBLIC_FIREBASE_STORAGE_ENABLED=false`. Dictation works the same; the recording toggle is just hidden. If an upload fails because Storage isn't set up, the app also turns recording off on its own with one message.
 5. **Project settings → Your apps → Web app (`</>`)** → register an app and copy its config.
 6. Copy `.env.example` to `.env.local` and fill in the values:
 
@@ -63,7 +63,11 @@ Open http://localhost:3000 in **Chrome or Edge**. Without Firebase settings the 
    ```
 
    These values are public by design: they identify the project. Security comes from the rules in step 7.
-7. **Deploy the security rules:**
+7. **Deploy the security rules.**
+
+   **Project shared with another app?** Don't deploy (that would replace the other app's rules). In the Firebase console, go to **Firestore → Rules**, copy the whole `match /srmVoiceLog/{uid} { … }` block from `firestore.rules`, paste it inside your existing `match /databases/{database}/documents { … }`, and **Publish**. Do the same with the block in `storage.rules` under **Storage → Rules** if you use Storage. The blocks are self-contained and affect only `srmVoiceLog`.
+
+   **Dedicated project?** Deploy both files:
 
    ```bash
    npx firebase-tools login
@@ -76,12 +80,14 @@ Open http://localhost:3000 in **Chrome or Edge**. Without Firebase settings the 
 ### Data layout and rules
 
 ```
-users/{uid}/vendors/{vendorId}      Vendor
-users/{uid}/cases/{caseId}          Case (flat, with vendorId, so reports read one collection)
-storage: users/{uid}/audio/{caseId} original recording
+srmVoiceLog/{uid}/vendors/{vendorId}      Vendor
+srmVoiceLog/{uid}/cases/{caseId}          Case (flat, with vendorId, so reports read one collection)
+storage: srmVoiceLog/{uid}/audio/{caseId} original recording
 ```
 
-- `firestore.rules` lets each user read and write **only** `users/{their uid}/…`. It also validates every case: a required Case, ISO dates, **End Date ≥ Start Date**, and `status` = `closed` exactly when End Date is set.
+The app keeps everything under its own `srmVoiceLog` root, so it can **share a Firebase project with another app** without touching that app's collections.
+
+- `firestore.rules` lets each user read and write **only** `srmVoiceLog/{their uid}/…`. It also validates every case: a required Case, ISO dates, **End Date ≥ Start Date**, and `status` = `closed` exactly when End Date is set.
 - `storage.rules`: owner-only, audio content types only, 20 MB max.
 
 ---

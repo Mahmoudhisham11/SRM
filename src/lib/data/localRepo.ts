@@ -21,6 +21,7 @@ function newId(): string {
  */
 export class LocalRepo implements DataRepo {
   readonly kind = "local" as const;
+  readonly audioEnabled = true;
   private listeners = new Set<() => void>();
   private store: Store;
 

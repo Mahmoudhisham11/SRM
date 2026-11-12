@@ -505,12 +505,15 @@ export function EmptyState({ title, body, action }: { title: string; body?: Reac
 
 export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => void }) {
   const { t } = useI18n();
+  const code = String((error as { code?: string }).code ?? "");
+  // The most likely setup problem gets an actionable message instead of Firebase's raw text.
+  const message = code.includes("permission-denied") ? t("common.rulesMissing") : error.message;
   return (
     <div role="alert" className="flex flex-col items-center gap-3 rounded-[var(--radius-card)] border border-danger/30 bg-danger-bg px-6 py-10 text-center">
       <CircleAlert className="h-8 w-8 text-danger" aria-hidden />
       <p className="font-bold text-ink">{t("common.loadError")}</p>
       <p className="text-sm text-ink-2" dir="auto">
-        {error.message}
+        {message}
       </p>
       {onRetry && (
         <Button variant="outline" onClick={onRetry}>

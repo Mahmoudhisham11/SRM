@@ -35,6 +35,9 @@ export const MESSAGES = {
   "common.optional": { ar: "اختياري", en: "Optional" },
   "common.loadError": { ar: "حصلت مشكلة في تحميل البيانات", en: "Couldn't load your data" },
   "common.noPermission": { ar: "مفيش صلاحية للعملية دي", en: "You don't have permission for that" },
+  "common.rulesMissing": { ar: "Firebase رافض الوصول للبيانات — لازم تضيف قواعد srmVoiceLog في Firestore Rules (الخطوات في README)", en: "Firebase denied access to the data — add the srmVoiceLog block to your Firestore Rules (see README)" },
+  "signin.unauthorizedDomain": { ar: "الدومين ده مش مضاف في Firebase — ضيفه من Authentication ← Settings ← Authorized domains", en: "This domain isn't authorized in Firebase — add it under Authentication → Settings → Authorized domains" },
+  "signin.popupBlocked": { ar: "المتصفح منع نافذة تسجيل الدخول — اسمح بالنوافذ المنبثقة وجرّب تاني", en: "The browser blocked the sign-in window — allow pop-ups and try again" },
   "common.syncLater": { ar: "مفيش اتصال — هيتزامن لما النت يرجع", en: "No connection — it will sync when you're back online" },
 
   // --- home -------------------------------------------------------------------
@@ -174,6 +177,7 @@ export const MESSAGES = {
   "voice.audioOffAndroid": { ar: "وقفنا حفظ الصوت الأصلي على الجهاز ده — المايك مش بيشتغل للاتنين مع بعض", en: "Original-audio recording was turned off on this device — the mic can't do both at once" },
   "voice.audioStartFailed": { ar: "التسجيل الصوتي ما اشتغلش", en: "Couldn't start audio recording" },
   "voice.audioUploadFailed": { ar: "الحالة اتحفظت بس التسجيل الصوتي ما اترفعش", en: "Case saved, but the recording didn't upload" },
+  "voice.audioStorageOff": { ar: "حفظ التسجيل الصوتي مش متاح (Firebase Storage مش متفعّل) — الإملاء شغال عادي", en: "Saving recordings isn't available (Firebase Storage isn't set up) — dictation still works" },
   "voice.parseFailed": { ar: "ما قدرناش نفهم النص", en: "Couldn't understand the text" },
   "voice.unsupported.title": { ar: "المتصفح ده مش بيدعم التعرف على الصوت", en: "This browser doesn't support speech recognition" },
   "voice.unsupported.body": { ar: g("استخدمي Google Chrome أو Microsoft Edge للتسجيل بالصوت — وتقدري تكمّلي دلوقتي بالكتابة.", "استخدم Google Chrome أو Microsoft Edge للتسجيل بالصوت — وتقدر تكمّل دلوقتي بالكتابة."), en: "Use Google Chrome or Microsoft Edge for voice — you can keep going by typing." },

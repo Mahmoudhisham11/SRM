@@ -1,17 +1,16 @@
 rules_version = '2';
 
-// Original case recordings: users/{uid}/audio/{caseId}
-// Only the owner can read/write; audio only; max 20 MB per clip.
+// SRM Voice Log — Storage rules for the original case recordings:
+// srmVoiceLog/{uid}/audio/{caseId}. Owner-only, audio only, max 20 MB per clip.
+// Sharing the bucket with another app? Paste just the `match /srmVoiceLog/…`
+// block into your existing `match /b/{bucket}/o { … }`.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /users/{uid}/audio/{caseId} {
+    match /srmVoiceLog/{uid}/audio/{caseId} {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
         && request.resource.size < 20 * 1024 * 1024
         && request.resource.contentType.matches('audio/.*');
-    }
-    match /{allPaths=**} {
-      allow read, write: if false;
     }
   }
 }

@@ -29,6 +29,8 @@ export function errorKey(e: unknown): MessageKey | null {
   if (code.includes("permission-denied")) return "common.noPermission";
   if (code.includes("unavailable") || code.includes("retry-limit-exceeded")) return "common.syncLater";
   if (code.includes("popup-closed-by-user") || code.includes("cancelled-popup-request")) return "signin.cancelled";
+  if (code.includes("unauthorized-domain")) return "signin.unauthorizedDomain";
+  if (code.includes("popup-blocked")) return "signin.popupBlocked";
   return null;
 }
 

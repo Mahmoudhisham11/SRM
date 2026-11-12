@@ -25,6 +25,13 @@ const config = {
 /** Without Firebase env vars the app runs in demo mode (data in this browser only). */
 export const isFirebaseConfigured = Boolean(config.apiKey && config.projectId && config.appId);
 
+/**
+ * Saving the original audio needs Cloud Storage for Firebase (Blaze plan on new
+ * projects). Set NEXT_PUBLIC_FIREBASE_STORAGE_ENABLED=false until it's set up:
+ * dictation keeps working, recordings just aren't kept.
+ */
+export const isAudioStorageEnabled = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_ENABLED !== "false";
+
 /** Local development against `firebase emulators:start` (see README). */
 const useEmulators = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "1";
 

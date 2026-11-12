@@ -36,34 +36,35 @@ const anon = () => env.unauthenticatedContext().firestore();
 describe("ownership", () => {
   it("owner can create/read/update/delete own vendor and case", async () => {
     const db = alice();
-    await assertSucceeds(setDoc(doc(db, "users/alice/vendors/v1"), vendor));
-    await assertSucceeds(getDoc(doc(db, "users/alice/vendors/v1")));
-    await assertSucceeds(setDoc(doc(db, "users/alice/cases/c1"), caseDoc));
-    await assertSucceeds(updateDoc(doc(db, "users/alice/cases/c1"), { endDate: "2025-03-20", status: "closed", updatedAt: now + 1 }));
-    await assertSucceeds(deleteDoc(doc(db, "users/alice/cases/c1")));
+    await assertSucceeds(setDoc(doc(db, "srmVoiceLog/alice/vendors/v1"), vendor));
+    await assertSucceeds(getDoc(doc(db, "srmVoiceLog/alice/vendors/v1")));
+    await assertSucceeds(setDoc(doc(db, "srmVoiceLog/alice/cases/c1"), caseDoc));
+    await assertSucceeds(updateDoc(doc(db, "srmVoiceLog/alice/cases/c1"), { endDate: "2025-03-20", status: "closed", updatedAt: now + 1 }));
+    await assertSucceeds(deleteDoc(doc(db, "srmVoiceLog/alice/cases/c1")));
   });
 
   it("other users cannot read or write someone else's data", async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), "users/alice/cases/c1"), caseDoc);
+      await setDoc(doc(ctx.firestore(), "srmVoiceLog/alice/cases/c1"), caseDoc);
     });
-    await assertFails(getDoc(doc(bob(), "users/alice/cases/c1")));
-    await assertFails(setDoc(doc(bob(), "users/alice/cases/c2"), caseDoc));
-    await assertFails(deleteDoc(doc(bob(), "users/alice/cases/c1")));
+    await assertFails(getDoc(doc(bob(), "srmVoiceLog/alice/cases/c1")));
+    await assertFails(setDoc(doc(bob(), "srmVoiceLog/alice/cases/c2"), caseDoc));
+    await assertFails(deleteDoc(doc(bob(), "srmVoiceLog/alice/cases/c1")));
   });
 
   it("signed-out users get nothing", async () => {
-    await assertFails(getDoc(doc(anon(), "users/alice/cases/c1")));
-    await assertFails(setDoc(doc(anon(), "users/alice/vendors/v1"), vendor));
+    await assertFails(getDoc(doc(anon(), "srmVoiceLog/alice/cases/c1")));
+    await assertFails(setDoc(doc(anon(), "srmVoiceLog/alice/vendors/v1"), vendor));
   });
 
-  it("paths outside users/{uid} are closed", async () => {
+  it("paths outside srmVoiceLog/{uid} are closed", async () => {
     await assertFails(setDoc(doc(alice(), "shared/x"), { a: 1 }));
+    await assertFails(setDoc(doc(alice(), "users/alice"), { a: 1 }));
   });
 });
 
 describe("case validation", () => {
-  const put = (data: object) => setDoc(doc(alice(), "users/alice/cases/c1"), data);
+  const put = (data: object) => setDoc(doc(alice(), "srmVoiceLog/alice/cases/c1"), data);
   it("end date before start date is rejected", async () => {
     await assertFails(put({ ...caseDoc, endDate: "2025-03-10", status: "closed" }));
   });
@@ -83,8 +84,8 @@ describe("case validation", () => {
 
 describe("vendor validation", () => {
   it("needs a name", async () => {
-    await assertFails(setDoc(doc(alice(), "users/alice/vendors/v1"), { ...vendor, nameAr: "", nameEn: "" }));
-    await assertSucceeds(setDoc(doc(alice(), "users/alice/vendors/v1"), { ...vendor, nameAr: "", nameEn: "Nile" }));
+    await assertFails(setDoc(doc(alice(), "srmVoiceLog/alice/vendors/v1"), { ...vendor, nameAr: "", nameEn: "" }));
+    await assertSucceeds(setDoc(doc(alice(), "srmVoiceLog/alice/vendors/v1"), { ...vendor, nameAr: "", nameEn: "Nile" }));
   });
 });
 
@@ -92,11 +93,11 @@ describe("storage", () => {
   const audio = new Uint8Array([1, 2, 3]);
   it("owner can upload and read audio", async () => {
     const st = env.authenticatedContext("alice").storage();
-    await assertSucceeds(uploadBytes(ref(st, "users/alice/audio/c1"), audio, { contentType: "audio/webm" }));
-    await assertSucceeds(getBytes(ref(st, "users/alice/audio/c1")));
+    await assertSucceeds(uploadBytes(ref(st, "srmVoiceLog/alice/audio/c1"), audio, { contentType: "audio/webm" }));
+    await assertSucceeds(getBytes(ref(st, "srmVoiceLog/alice/audio/c1")));
   });
   it("others cannot read; non-audio rejected", async () => {
-    await assertFails(getBytes(ref(env.authenticatedContext("bob").storage(), "users/alice/audio/c1")));
-    await assertFails(uploadBytes(ref(env.authenticatedContext("alice").storage(), "users/alice/audio/c2"), audio, { contentType: "text/html" }));
+    await assertFails(getBytes(ref(env.authenticatedContext("bob").storage(), "srmVoiceLog/alice/audio/c1")));
+    await assertFails(uploadBytes(ref(env.authenticatedContext("alice").storage(), "srmVoiceLog/alice/audio/c2"), audio, { contentType: "text/html" }));
   });
 });

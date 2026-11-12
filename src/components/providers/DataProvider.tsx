@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { getFirebase, isFirebaseConfigured } from "@/lib/firebase";
+import { getFirebase, isAudioStorageEnabled, isFirebaseConfigured } from "@/lib/firebase";
 import type { DataRepo } from "@/lib/data/repo";
 import { LocalRepo } from "@/lib/data/localRepo";
 import { FirestoreRepo } from "@/lib/data/firestoreRepo";
@@ -56,7 +56,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setAuth({
           status: "signedIn",
           user: { uid: u.uid, name: u.displayName ?? "", email: u.email ?? "", photoURL: u.photoURL },
-          repo: new FirestoreRepo(db, storage, u.uid),
+          repo: new FirestoreRepo(db, storage, u.uid, isAudioStorageEnabled),
         });
       });
     });

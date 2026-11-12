@@ -19,10 +19,16 @@ import { buildCaseDoc, cleanVendorInput, patchWithStatus, sortCases, sortVendors
 
 /**
  * Layout (all per-user, enforced by firestore.rules):
- *   users/{uid}/vendors/{vendorId}
- *   users/{uid}/cases/{caseId}        (flat, with vendorId — reports read all)
- *   storage: users/{uid}/audio/{caseId}
+ *   srmVoiceLog/{uid}/vendors/{vendorId}
+ *   srmVoiceLog/{uid}/cases/{caseId}  (flat, with vendorId — reports read all)
+ *   storage: srmVoiceLog/{uid}/audio/{caseId}
+ *
+ * A dedicated root collection, so the app can share a Firebase project with
+ * other apps (e.g. their own "users" collection) without colliding.
  */
+/** Root collection (Firestore) and folder (Storage) for this app. Keep in sync with the rules. */
+export const ROOT = "srmVoiceLog";
+
 export class FirestoreRepo implements DataRepo {
   readonly kind = "firestore" as const;
 
@@ -30,16 +36,17 @@ export class FirestoreRepo implements DataRepo {
     private db: Firestore,
     private storage: FirebaseStorage,
     private uid: string,
+    readonly audioEnabled: boolean,
   ) {}
 
   private vendorsCol() {
-    return collection(this.db, "users", this.uid, "vendors");
+    return collection(this.db, ROOT, this.uid, "vendors");
   }
   private casesCol() {
-    return collection(this.db, "users", this.uid, "cases");
+    return collection(this.db, ROOT, this.uid, "cases");
   }
   private audioRef(caseId: string) {
-    return ref(this.storage, `users/${this.uid}/audio/${caseId}`);
+    return ref(this.storage, `${ROOT}/${this.uid}/audio/${caseId}`);
   }
 
   watchVendors(onData: (v: Vendor[]) => void, onError: (e: Error) => void) {
@@ -79,7 +86,9 @@ export class FirestoreRepo implements DataRepo {
       refs.slice(i, i + 450).forEach((r) => batch.delete(r));
       await batch.commit();
     }
-    await Promise.allSettled(cases.docs.filter((d) => d.get("audioUrl")).map((d) => deleteObject(this.audioRef(d.id))));
+    if (this.audioEnabled) {
+      await Promise.allSettled(cases.docs.filter((d) => d.get("audioUrl")).map((d) => deleteObject(this.audioRef(d.id))));
+    }
   }
 
   newCaseId() {
@@ -98,10 +107,11 @@ export class FirestoreRepo implements DataRepo {
 
   async deleteCase(id: string) {
     await deleteDoc(doc(this.casesCol(), id));
-    await deleteObject(this.audioRef(id)).catch(() => undefined); // may not exist
+    if (this.audioEnabled) await deleteObject(this.audioRef(id)).catch(() => undefined); // may not exist
   }
 
   async uploadAudio(caseId: string, blob: Blob) {
+    if (!this.audioEnabled) throw Object.assign(new Error("Audio storage is disabled"), { code: "storage/disabled" });
     const r = this.audioRef(caseId);
     await uploadBytes(r, blob, { contentType: blob.type || "audio/webm" });
     const url = await getDownloadURL(r);
