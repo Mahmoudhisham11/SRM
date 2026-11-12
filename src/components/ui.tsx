@@ -1,285 +1,563 @@
 "use client";
 
-import { useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type TextareaHTMLAttributes,
+} from "react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, animate, motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
+import { CircleAlert, CircleCheck, Target, X } from "lucide-react";
+import { useI18n } from "@/lib/i18n/useI18n";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+// --- Buttons ----------------------------------------------------------------
 
+type Variant = "primary" | "soft" | "outline" | "ghost" | "danger";
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-teal-700 text-white hover:bg-teal-800 active:bg-teal-900 disabled:bg-teal-700/50",
-  secondary: "bg-white text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50",
-  ghost: "text-slate-700 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-50",
-  danger: "bg-red-600 text-white hover:bg-red-700 active:bg-red-800 disabled:opacity-50",
+  primary: "bg-berry text-on-berry shadow-[var(--shadow-mic)] hover:bg-berry-strong",
+  soft: "bg-surface-pink text-berry hover:bg-berry-tint",
+  outline: "bg-surface text-ink border border-line-strong hover:bg-surface-2",
+  ghost: "text-ink-2 hover:bg-surface-2",
+  danger: "bg-danger text-white hover:opacity-90 dark:text-[#3a0d1a]",
 };
+const SIZES = { sm: "h-9 px-3.5 text-sm", md: "h-11 px-5 text-sm", lg: "h-13 px-6 text-base" };
 
 export function Button({
   variant = "primary",
   size = "md",
   className = "",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: "sm" | "md" | "lg" }) {
-  const sizes = { sm: "h-9 px-3 text-sm", md: "h-11 px-4 text-sm", lg: "h-12 px-5 text-base" };
+}: Omit<HTMLMotionProps<"button">, "ref"> & { variant?: Variant; size?: keyof typeof SIZES }) {
   return (
-    <button
+    <motion.button
       type="button"
+      whileTap={props.disabled ? undefined : { scale: 0.96 }}
       {...props}
-      className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-xl font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed ${sizes[size]} ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-full font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-berry disabled:cursor-not-allowed disabled:opacity-45 ${SIZES[size]} ${VARIANTS[variant]} ${className}`}
     />
   );
 }
 
-export function IconButton({ label, className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+export function IconButton({
+  label,
+  className = "",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
       {...props}
-      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 active:bg-slate-200 focus-visible:outline-2 focus-visible:outline-teal-600 disabled:opacity-40 ${className}`}
+      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink-2 shadow-[var(--shadow-soft)] transition hover:text-berry active:scale-95 focus-visible:outline-2 focus-visible:outline-berry disabled:opacity-40 ${className}`}
     />
   );
 }
 
-export function Field({
+// --- Fields -----------------------------------------------------------------
+
+const fieldBase =
+  "w-full rounded-2xl border bg-surface px-4 text-base text-ink placeholder:text-ink-3 transition focus:outline-none focus:ring-4 focus:ring-berry-tint focus:border-berry";
+
+export function TextField({
   label,
   error,
-  hint,
-  children,
-  htmlFor,
-}: {
-  label: ReactNode;
-  error?: string;
-  hint?: ReactNode;
-  children: ReactNode;
-  htmlFor?: string;
-}) {
+  required,
+  className = "",
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { label: ReactNode; error?: string; required?: boolean }) {
+  const id = useId();
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={htmlFor} className="text-sm font-semibold text-slate-700">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-semibold text-ink">
         {label}
+        {required && <span className="text-danger">*</span>}
       </label>
-      {children}
-      {error ? <p className="text-xs font-medium text-red-600">{error}</p> : hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
+      <input
+        id={id}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-err` : undefined}
+        {...props}
+        className={`${fieldBase} h-12 ${error ? "border-danger bg-danger-bg" : "border-line-strong"} ${className}`}
+      />
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            id={`${id}-err`}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center gap-1 text-xs font-medium text-danger"
+          >
+            <CircleAlert className="h-3.5 w-3.5" aria-hidden />
+            {error}
+          </motion.p>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-const inputBase =
-  "w-full rounded-xl border bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/40";
-
-export function TextInput({
+export function TextAreaField({
   label,
-  error,
-  hint,
   className = "",
   ...props
-}: InputHTMLAttributes<HTMLInputElement> & { label: ReactNode; error?: string; hint?: ReactNode }) {
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label: ReactNode }) {
   const id = useId();
   return (
-    <Field label={label} error={error} hint={hint} htmlFor={id}>
-      <input
-        id={id}
-        {...props}
-        className={`${inputBase} h-11 ${error ? "border-red-500" : "border-slate-300"} ${className}`}
-      />
-    </Field>
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-semibold text-ink">
+        {label}
+      </label>
+      <textarea id={id} rows={2} {...props} className={`${fieldBase} border-line-strong py-3 ${className}`} />
+    </div>
   );
 }
 
-export function TextArea({
-  label,
-  error,
-  className = "",
-  ...props
-}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label: ReactNode; error?: string }) {
-  const id = useId();
-  return (
-    <Field label={label} error={error} htmlFor={id}>
-      <textarea id={id} rows={3} {...props} className={`${inputBase} py-2 ${error ? "border-red-500" : "border-slate-300"} ${className}`} />
-    </Field>
-  );
+// --- Overlay: bottom sheet on phones, centered dialog on desktop ---------------
+
+function useLockScroll(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [active]);
 }
 
-export function Modal({
+function useIsDesktop() {
+  const [desktop, setDesktop] = useState(false);
+  useEffect(() => {
+    const q = matchMedia("(min-width: 768px)");
+    const on = () => setDesktop(q.matches);
+    on();
+    q.addEventListener("change", on);
+    return () => q.removeEventListener("change", on);
+  }, []);
+  return desktop;
+}
+
+export function Sheet({
   open,
   title,
   onClose,
   children,
-  footer,
+  hideHeader = false,
+  labelledBy,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
-  footer?: ReactNode;
+  hideHeader?: boolean;
+  labelledBy?: string;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
+  const { t } = useI18n();
+  const desktop = useIsDesktop();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useLockScroll(open);
+
   useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
-  }, [open]);
-  return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      onCancel={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-      className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl bg-white p-0 shadow-2xl backdrop:bg-slate-900/50"
-    >
+    if (!open) return;
+    const prevFocus = document.activeElement as HTMLElement | null;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    // Focus the first field (or the panel) when it opens.
+    const id = requestAnimationFrame(() => {
+      const first = panelRef.current?.querySelector<HTMLElement>("input,textarea,select,[data-autofocus]");
+      (first ?? panelRef.current)?.focus();
+    });
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      cancelAnimationFrame(id);
+      prevFocus?.focus?.();
+    };
+  }, [open, onClose]);
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <AnimatePresence>
       {open && (
-        <div className="flex max-h-[85dvh] flex-col">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-            <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-            <IconButton label="إغلاق" onClick={onClose}>
-              <Icon name="x" />
-            </IconButton>
-          </div>
-          <div className="overflow-y-auto px-5 py-4">{children}</div>
-          {footer && <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-3">{footer}</div>}
+        <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center md:p-6">
+          <motion.div
+            className="absolute inset-0 bg-[#2a1a25]/40 backdrop-blur-[2px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+          />
+          <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={labelledBy ?? titleId}
+            tabIndex={-1}
+            initial={desktop ? { opacity: 0, scale: 0.95, y: 12 } : { y: "100%" }}
+            animate={desktop ? { opacity: 1, scale: 1, y: 0 } : { y: 0 }}
+            exit={desktop ? { opacity: 0, scale: 0.97, y: 8 } : { y: "100%" }}
+            transition={{ type: "spring", stiffness: 380, damping: 36 }}
+            drag={desktop ? false : "y"}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+            }}
+            className="relative flex max-h-[92dvh] w-full flex-col rounded-t-[2rem] bg-surface pb-[env(safe-area-inset-bottom)] shadow-[var(--shadow-lift)] outline-none md:max-w-lg md:rounded-[2rem]"
+          >
+            <div className="mx-auto mt-2.5 h-1.5 w-12 rounded-full bg-line-strong md:hidden" aria-hidden />
+            {!hideHeader && (
+              <div className="flex items-center justify-between gap-3 px-6 pb-2 pt-4">
+                <h2 id={titleId} className="text-xl font-bold text-ink">
+                  {title}
+                </h2>
+                <IconButton label={t("common.close")} onClick={onClose}>
+                  <X className="h-5 w-5" />
+                </IconButton>
+              </div>
+            )}
+            <div className="overflow-y-auto px-6 pb-6 pt-2">{children}</div>
+          </motion.div>
         </div>
       )}
-    </dialog>
+    </AnimatePresence>,
+    document.body,
   );
 }
 
+/** Danger confirmation. With `confirmText`, the button unlocks only once it's typed. */
 export function ConfirmDialog({
   open,
   title,
-  message,
-  confirmLabel = "حذف",
+  body,
+  icon,
+  confirmLabel,
+  cancelLabel,
+  confirmText,
+  confirmPrompt,
   onConfirm,
   onClose,
 }: {
   open: boolean;
   title: string;
-  message: ReactNode;
-  confirmLabel?: string;
+  body: ReactNode;
+  icon: ReactNode;
+  confirmLabel: string;
+  cancelLabel: string;
+  confirmText?: string;
+  confirmPrompt?: string;
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const [typed, setTyped] = useState("");
+  const titleId = useId();
+  const ok = !confirmText || typed.trim() === confirmText;
   return (
-    <Modal
+    <Sheet
       open={open}
       title={title}
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            إلغاء
-          </Button>
+      hideHeader
+      labelledBy={titleId}
+      onClose={() => {
+        setTyped("");
+        onClose();
+      }}
+    >
+      <div className="flex flex-col items-center gap-3 pt-4 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-danger/40 bg-danger-bg text-danger">
+          {icon}
+        </span>
+        <h2 id={titleId} className="text-xl font-bold text-ink">
+          {title}
+        </h2>
+        <div className="text-sm leading-relaxed text-ink-2">{body}</div>
+        {confirmText && (
+          <div className="w-full text-start">
+            <TextField
+              label={confirmPrompt}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              dir="ltr"
+              inputMode="numeric"
+              autoComplete="off"
+            />
+          </div>
+        )}
+        <div className="mt-2 flex w-full flex-col gap-2">
           <Button
             variant="danger"
+            size="lg"
+            disabled={!ok}
             onClick={() => {
+              setTyped("");
               onConfirm();
               onClose();
             }}
           >
             {confirmLabel}
           </Button>
-        </>
-      }
+          <Button
+            variant="outline"
+            size="lg"
+            data-autofocus
+            onClick={() => {
+              setTyped("");
+              onClose();
+            }}
+          >
+            {cancelLabel}
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+// --- Small pieces -------------------------------------------------------------
+
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+  className = "",
+  size = "md",
+}: {
+  value: T;
+  options: Array<{ value: T; label: ReactNode }>;
+  onChange: (v: T) => void;
+  label: string;
+  className?: string;
+  size?: "sm" | "md";
+}) {
+  const id = useId();
+  return (
+    <div role="radiogroup" aria-label={label} className={`relative flex rounded-full bg-surface-2 p-1 ${className}`}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(o.value)}
+            className={`relative flex-1 whitespace-nowrap rounded-full font-semibold transition-colors ${size === "sm" ? "h-8 px-3 text-xs" : "h-9 px-4 text-sm"} ${on ? "text-berry" : "text-ink-3 hover:text-ink-2"}`}
+          >
+            {on && (
+              <motion.span
+                layoutId={`seg-${id}`}
+                className="absolute inset-0 rounded-full bg-surface shadow-[var(--shadow-soft)]"
+                transition={{ type: "spring", stiffness: 500, damping: 38 }}
+              />
+            )}
+            <span className="relative">{o.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** «EN | ع» pill — the active language sits in a berry circle that slides across. */
+export function LangToggle() {
+  const { lang, setLang, t } = useI18n();
+  // Unique per instance: the phone top bar and the desktop sidebar both mount one.
+  const thumbId = useId();
+  return (
+    <button
+      type="button"
+      onClick={() => setLang(lang === "ar" ? "en" : "ar")}
+      aria-label={t("lang.switch")}
+      title={t("lang.switch")}
+      dir="ltr"
+      className="relative flex h-10 items-center gap-1 rounded-full border border-line bg-surface p-1 shadow-[var(--shadow-soft)]"
     >
-      <div className="text-slate-700">{message}</div>
-    </Modal>
+      {(["en", "ar"] as const).map((l) => (
+        <span key={l} className={`relative flex h-8 w-9 items-center justify-center text-sm font-bold ${lang === l ? "text-on-berry" : "text-ink-3"}`}>
+          {lang === l && (
+            <motion.span layoutId={`lang-${thumbId}`} className="absolute inset-0 rounded-full bg-berry" transition={{ type: "spring", stiffness: 500, damping: 34 }} />
+          )}
+          <span className="relative">{l === "en" ? "EN" : "ع"}</span>
+        </span>
+      ))}
+    </button>
   );
 }
 
-export function Spinner({ className = "" }: { className?: string }) {
+export function FlowerMark({ className = "h-6 w-6" }: { className?: string }) {
   return (
-    <span
-      role="status"
-      aria-label="جاري التحميل"
-      className={`inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-teal-700 ${className}`}
-    />
+    <svg viewBox="0 0 32 32" className={className} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round">
+      {[0, 72, 144, 216, 288].map((r) => (
+        <path key={r} d="M16 15c-2.6-3.6-2.6-8 0-10.6 2.6 2.6 2.6 7 0 10.6Z" transform={`rotate(${r} 16 16)`} />
+      ))}
+      <circle cx="16" cy="16" r="1.8" fill="currentColor" stroke="none" />
+    </svg>
   );
 }
 
-export function LoadingBlock({ label = "جاري التحميل…" }: { label?: string }) {
+export function Logo({ full = false }: { full?: boolean }) {
   return (
-    <div className="flex items-center justify-center gap-3 py-16 text-slate-500">
+    <span className="flex items-center gap-2 text-berry" dir="ltr">
+      <FlowerMark className="h-7 w-7" />
+      <span className="font-bold tracking-wide text-ink">{full ? "SRM Voice Log" : "SRM"}</span>
+    </span>
+  );
+}
+
+export function Monogram({ name, className = "h-11 w-11 text-lg" }: { name: string; className?: string }) {
+  // Skip the Arabic article: «المصرية» → «م» (as in the design).
+  const letter = (name.trim().replace(/^ال(?=\S)/, "")[0] ?? "?").toUpperCase();
+  return (
+    <span aria-hidden className={`flex shrink-0 items-center justify-center rounded-2xl bg-surface-pink font-bold text-berry ${className}`}>
+      {letter}
+    </span>
+  );
+}
+
+export function StatusPill({ status }: { status: "open" | "closed" }) {
+  const { t } = useI18n();
+  return status === "open" ? (
+    <span className="inline-flex items-center gap-1 rounded-full bg-open-bg px-2.5 py-1 text-xs font-bold text-open">
+      <Target className="h-3.5 w-3.5" aria-hidden />
+      {t("status.open")}
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded-full bg-closed-bg px-2.5 py-1 text-xs font-bold text-closed">
+      <CircleCheck className="h-3.5 w-3.5" aria-hidden />
+      {t("status.closed")}
+    </span>
+  );
+}
+
+/** Round status icon used at the end of compact rows. */
+export function StatusIcon({ status }: { status: "open" | "closed" }) {
+  const { t } = useI18n();
+  return status === "open" ? (
+    <Target role="img" aria-label={t("status.open")} className="h-5 w-5 shrink-0 text-open" />
+  ) : (
+    <CircleCheck role="img" aria-label={t("status.closed")} className="h-5 w-5 shrink-0 text-closed" />
+  );
+}
+
+export function Spinner({ className = "h-5 w-5" }: { className?: string }) {
+  return <span role="status" className={`inline-block animate-spin rounded-full border-2 border-berry-soft border-t-berry ${className}`} />;
+}
+
+export function Skeleton({ className = "" }: { className?: string }) {
+  return (
+    <span className={`relative block overflow-hidden rounded-full bg-surface-2 ${className}`} aria-hidden>
+      <span className="absolute inset-0 -translate-x-full animate-[shimmer_1.4s_infinite] bg-gradient-to-r from-transparent via-surface/70 to-transparent" />
+    </span>
+  );
+}
+
+export function LoadingBlock() {
+  const { t } = useI18n();
+  return (
+    <div className="flex items-center justify-center gap-3 py-16 text-ink-3">
       <Spinner />
-      <span>{label}</span>
+      <span>{t("common.loading")}</span>
     </div>
   );
 }
 
-export function EmptyState({ icon = "inbox", title, children }: { icon?: IconName; title: string; children?: ReactNode }) {
+export function SproutArt({ className = "h-24 w-28" }: { className?: string }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
-      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-        <Icon name={icon} />
-      </span>
-      <p className="font-semibold text-slate-800">{title}</p>
-      {children && <div className="text-sm text-slate-500">{children}</div>}
-    </div>
+    <svg viewBox="0 0 120 100" className={className} aria-hidden fill="none" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 86h76" stroke="var(--line-strong)" strokeWidth="2" />
+      <path d="M60 86V46" stroke="var(--closed)" strokeWidth="2.4" />
+      <path d="M60 60c-14 0-24-8-26-20 13-1 24 6 26 20Z" stroke="var(--closed)" strokeWidth="2.4" fill="var(--closed-bg)" />
+      <path d="M60 50c3-14 14-22 28-21-1 14-12 22-28 21Z" stroke="var(--closed)" strokeWidth="2.4" fill="var(--closed-bg)" />
+      <path d="M60 46c-2-8 0-15 6-20" stroke="var(--closed)" strokeWidth="2.4" />
+      {[
+        [26, 24],
+        [96, 14],
+        [100, 56],
+      ].map(([x, y]) => (
+        <path key={`${x}-${y}`} d={`M${x} ${y - 5}v10M${x - 5} ${y}h10`} stroke="var(--berry)" strokeWidth="2" />
+      ))}
+    </svg>
+  );
+}
+
+export function EmptyState({ title, body, action }: { title: string; body?: ReactNode; action?: ReactNode }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="card flex flex-col items-center gap-3 px-6 py-10 text-center"
+    >
+      <SproutArt />
+      <p className="text-lg font-bold text-ink">{title}</p>
+      {body && <div className="text-sm text-ink-2">{body}</div>}
+      {action && <div className="mt-2 flex flex-wrap justify-center gap-2">{action}</div>}
+    </motion.div>
   );
 }
 
 export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => void }) {
+  const { t } = useI18n();
   return (
-    <div role="alert" className="flex flex-col items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-6 py-10 text-center">
-      <p className="font-semibold text-red-800">حصلت مشكلة أثناء تحميل البيانات</p>
-      <p className="text-sm text-red-700" dir="auto">
+    <div role="alert" className="flex flex-col items-center gap-3 rounded-[var(--radius-card)] border border-danger/30 bg-danger-bg px-6 py-10 text-center">
+      <CircleAlert className="h-8 w-8 text-danger" aria-hidden />
+      <p className="font-bold text-ink">{t("common.loadError")}</p>
+      <p className="text-sm text-ink-2" dir="auto">
         {error.message}
       </p>
       {onRetry && (
-        <Button variant="secondary" onClick={onRetry}>
-          إعادة المحاولة
+        <Button variant="outline" onClick={onRetry}>
+          {t("common.retry")}
         </Button>
       )}
     </div>
   );
 }
 
-export function StatusBadge({ status }: { status: "open" | "closed" }) {
-  return status === "open" ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-      مفتوحة
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-      مغلقة
+/** Number that rolls to its new value (e.g. "today" after saving a case). */
+export function CountUp({ value, className = "" }: { value: number; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const prev = useRef(value);
+  const reduce = useReducedMotion();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const from = prev.current;
+    prev.current = value;
+    if (reduce || from === value) {
+      el.textContent = value.toLocaleString("en-US");
+      return;
+    }
+    const controls = animate(from, value, {
+      duration: 0.6,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (v) => (el.textContent = Math.round(v).toLocaleString("en-US")),
+    });
+    return () => controls.stop();
+  }, [value, reduce]);
+  return (
+    <span ref={ref} className={`tabular-nums ${className}`}>
+      {value.toLocaleString("en-US")}
     </span>
   );
 }
 
-// --- Icons (inline SVG, stroke-based, 20px) ---------------------------------
-const PATHS = {
-  mic: "M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Zm7 10a7 7 0 0 1-14 0M12 19v3",
-  stop: "M7 7h10v10H7z",
-  plus: "M12 5v14M5 12h14",
-  search: "m21 21-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z",
-  edit: "M4 20h4L19 9l-4-4L4 16v4Zm10-14 4 4",
-  trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
-  x: "M6 6l12 12M18 6 6 18",
-  check: "m5 12 5 5L20 7",
-  chevron: "m15 18-6-6 6-6",
-  back: "m9 18 6-6-6-6",
-  inbox: "M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8v6H4v-6Z",
-  chart: "M4 20V10M10 20V4M16 20v-7M22 20H2",
-  users: "M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 9v-1a4 4 0 0 0-3-3.9M16 2.1a4 4 0 0 1 0 7.8",
-  download: "M12 3v12m0 0 5-5m-5 5-5-5M4 21h16",
-  print: "M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z",
-  play: "M7 4v16l13-8L7 4Z",
-  logout: "M15 4h4v16h-4M10 17l-5-5 5-5M5 12h11",
-  keyboard: "M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10",
-  skip: "M5 5v14l9-7-9-7Zm12 0v14",
-  undo: "M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3",
-  alert: "M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z",
-  calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
-} as const;
-
-export type IconName = keyof typeof PATHS;
-
-export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
+/** Renders a message whose {slot} gets special styling (e.g. the highlighted name). */
+export function Slotted({ text, slot, value, className = "highlight" }: { text: string; slot: string; value: ReactNode; className?: string }) {
+  const [before, after] = text.split(`{${slot}}`);
+  if (after === undefined) return <>{text}</>;
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d={PATHS[name]} />
-    </svg>
+    <>
+      {before}
+      <span className={className}>{value}</span>
+      {after}
+    </>
   );
 }

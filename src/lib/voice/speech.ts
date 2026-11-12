@@ -66,28 +66,16 @@ export interface SpeechOptions {
   onInterim?(text: string): void;
   onFinal(text: string): void;
   onListening?(listening: boolean): void;
-  onError?(code: string, message: string): void;
+  /** `code` is the SpeechRecognition error ("not-allowed", "network", …). */
+  onError?(code: string): void;
   onEnd?(reason: EndReason): void;
 }
 
 /** Errors that just mean "nothing heard yet" — keep going. */
 const BENIGN = new Set(["no-speech", "aborted"]);
 
-export function speechErrorMessage(code: string): string {
-  switch (code) {
-    case "not-allowed":
-    case "service-not-allowed":
-      return "اسمح للمتصفح باستخدام الميكروفون (من أيقونة القفل بجانب العنوان)";
-    case "audio-capture":
-      return "الميكروفون غير متاح — تأكد إنه متوصل ومش مستخدم في برنامج تاني";
-    case "network":
-      return "التعرف على الصوت محتاج إنترنت — كمّل بالكتابة لحد ما النت يرجع";
-    case "language-not-supported":
-      return "اللغة العربية (مصر) غير مدعومة في هذا المتصفح";
-    default:
-      return `خطأ في التعرف على الصوت (${code})`;
-  }
-}
+/** Error codes with their own message (others use "speech.generic"). */
+export const KNOWN_SPEECH_ERRORS = ["not-allowed", "audio-capture", "network", "language-not-supported", "restart-loop"] as const;
 
 export interface SpeechHandle {
   stop(): void;
@@ -98,7 +86,7 @@ let active: { rec: SR; opts: SpeechOptions; stop: (reason: EndReason) => void } 
 export function startSpeech(opts: SpeechOptions): SpeechHandle {
   const Ctor = getRecognitionCtor();
   if (!Ctor) {
-    opts.onError?.("unsupported", "المتصفح لا يدعم التعرف على الصوت");
+    opts.onError?.("unsupported");
     return { stop() {} };
   }
   active?.stop("preempted");
@@ -150,7 +138,8 @@ export function startSpeech(opts: SpeechOptions): SpeechHandle {
 
   rec.onerror = (e) => {
     if (BENIGN.has(e.error)) return;
-    opts.onError?.(e.error, speechErrorMessage(e.error));
+    // "service-not-allowed" is the same problem for the user as "not-allowed".
+    opts.onError?.(e.error === "service-not-allowed" ? "not-allowed" : e.error);
     finish("error");
   };
 
@@ -161,7 +150,7 @@ export function startSpeech(opts: SpeechOptions): SpeechHandle {
     // Guard against a tight restart loop (e.g. mic grabbed elsewhere).
     fastFailures = Date.now() - startedAt < 1000 ? fastFailures + 1 : 0;
     if (fastFailures > 5) {
-      opts.onError?.("restart-loop", "التعرف على الصوت بيقف لوحده — جرّب تقفل وتفتح الميكروفون");
+      opts.onError?.("restart-loop");
       return finish("error");
     }
     restartTimer = setTimeout(() => {
@@ -177,7 +166,8 @@ export function startSpeech(opts: SpeechOptions): SpeechHandle {
   try {
     rec.start();
   } catch (e) {
-    opts.onError?.("start-failed", String(e));
+    console.warn("SpeechRecognition.start failed", e);
+    opts.onError?.("start-failed");
     finish("error");
   }
   return {

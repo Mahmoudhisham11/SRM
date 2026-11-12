@@ -12,10 +12,10 @@ export type VoiceCommand = "next" | "skip" | "save" | "back" | "clear";
 
 const COMMAND_WORDS: Array<[VoiceCommand, string[]]> = [
   ["next", ["التالي", "التالى", "بعده", "اللي بعده", "next", "نكست"]],
-  ["skip", ["تخطي", "تخطى", "اتخطى", "سكيب", "skip", "فوت"]],
-  ["save", ["حفظ", "احفظ", "سيف", "save"]],
-  ["back", ["رجوع", "ارجع", "السابق", "back"]],
-  ["clear", ["امسح", "مسح", "clear"]],
+  ["skip", ["تخطي", "تخطى", "اتخطى", "سكيب", "skip", "فوت", "فوتي"]],
+  ["save", ["حفظ", "احفظ", "احفظي", "سيف", "save"]],
+  ["back", ["رجوع", "ارجع", "ارجعي", "السابق", "back"]],
+  ["clear", ["امسح", "امسحي", "مسح", "clear"]],
 ];
 
 /** normalized phrase → command; phrases may be 1 or 2 words. */
@@ -64,11 +64,3 @@ export function splitCommands(text: string): SplitResult {
   const body = tokens.slice(lo, hi).map((t) => t.raw).join(" ");
   return { leading, body, trailing };
 }
-
-export const COMMAND_HINTS: Record<VoiceCommand, string> = {
-  next: "التالي",
-  skip: "تخطي",
-  save: "حفظ",
-  back: "رجوع",
-  clear: "امسح",
-};

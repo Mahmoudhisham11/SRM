@@ -1,21 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { AudioLines, Check, Keyboard, NotebookPen, X } from "lucide-react";
 import { useRepo } from "@/components/providers/DataProvider";
-import { errorMessage, useToast } from "@/components/providers/ToastProvider";
-import { Button, Icon } from "@/components/ui";
+import { useToast } from "@/components/providers/ToastProvider";
+import { Segmented, Slotted } from "@/components/ui";
 import { CaseCard } from "@/components/cases/CaseCard";
-import { useCases } from "@/hooks/useCollections";
-import { useDefaultYear, useRecordAudio, useVoiceMode } from "@/hooks/useVoicePrefs";
+import { NotebookCard } from "@/components/home/NotebookCard";
 import { FieldMic, useSpeechSupported } from "./FieldMic";
 import { FieldsPanel } from "./FieldsPanel";
+import { CommandChips, MicOrb, PinStepper, SaveBurst, TranscriptBox, type MicState } from "./VoiceParts";
+import { useCases } from "@/hooks/useCollections";
+import { useAudioLevel } from "@/hooks/useAudioLevel";
+import { useClaimMic, useGreetingName } from "@/hooks/useAppChrome";
+import { useDefaultYear, useDictationLang, useRecordAudio, useSessionCount, useVoiceMode, type VoiceMode } from "@/hooks/useVoicePrefs";
+import { useI18n } from "@/lib/i18n/useI18n";
+import type { MessageKey } from "@/lib/i18n/messages";
 import { getCaseParser } from "@/lib/parsing/caseParser";
 import { parseSpokenDate } from "@/lib/parsing/arabicDates";
-import { buildDraft, emptyValues, FIELD_PROMPTS, guidedReducer, initialGuidedState, REVIEW_STEP } from "@/lib/voice/guided";
-import { COMMAND_HINTS, splitCommands } from "@/lib/voice/commands";
-import { startSpeech, type SpeechHandle } from "@/lib/voice/speech";
+import { buildDraft, emptyValues, guidedReducer, initialGuidedState, REVIEW_STEP } from "@/lib/voice/guided";
+import { splitCommands, type VoiceCommand } from "@/lib/voice/commands";
+import { KNOWN_SPEECH_ERRORS, startSpeech, type SpeechHandle } from "@/lib/voice/speech";
 import { CaseRecorder, isRecordingSupported } from "@/lib/voice/recorder";
-import { CASE_FIELDS, type CaseField, type Vendor } from "@/lib/types";
+import { crossedMilestone, notebookStats } from "@/lib/progress";
+import { CASE_FIELDS, DATE_FIELDS, FIELD_LABELS, type CaseField, type Vendor } from "@/lib/types";
 import type { FieldErrors } from "@/lib/validation";
 
 function vibrate(pattern: number | number[]) {
@@ -28,59 +37,88 @@ function vibrate(pattern: number | number[]) {
 
 type WakeLock = { release(): Promise<void> };
 
-export function VoiceLogger({ vendor }: { vendor: Vendor }) {
+const GUIDED_CMDS: VoiceCommand[] = ["next", "skip", "back", "clear", "save"];
+const FREE_CMDS: VoiceCommand[] = ["clear", "save"];
+const PROMPT_KEYS: Record<CaseField, MessageKey> = {
+  case: "voice.prompt.case",
+  taskBar: "voice.prompt.taskBar",
+  startDate: "voice.prompt.startDate",
+  endDate: "voice.prompt.endDate",
+  comments: "voice.prompt.comments",
+};
+
+export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; autoStart?: boolean }) {
   const repo = useRepo();
-  const { notify, track } = useToast();
+  const { notify, track, errorText } = useToast();
+  const { t, isAr } = useI18n();
   const supported = useSpeechSupported();
+  const name = useGreetingName();
   const [year, setYear] = useDefaultYear();
   const [mode, setMode] = useVoiceMode();
   const [recordAudio, setRecordAudio] = useRecordAudio();
+  const [dictation] = useDictationLang();
+  const [sessionCount, bumpSessionCount] = useSessionCount();
   const ctx = useMemo(() => ({ defaultYear: year }), [year]);
 
   const [open, setOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
+  const [heard, setHeard] = useState("");
   const [g, dispatch] = useReducer(guidedReducer, undefined, initialGuidedState);
   const [freeText, setFreeText] = useState("");
   const [errors, setErrors] = useState<FieldErrors<CaseField>>({});
   const [sessionIds, setSessionIds] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [burst, setBurst] = useState({ id: 0, big: false });
+  const [flash, setFlash] = useState<{ cmd: VoiceCommand; at: number } | null>(null);
+  const [flashKey, setFlashKey] = useState(0);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [micInView, setMicInView] = useState(true);
 
   const speech = useRef<SpeechHandle | null>(null);
   const recorder = useRef<CaseRecorder | null>(null);
   const wakeLock = useRef<WakeLock | null>(null);
   const freeTextRef = useRef("");
   const stateRef = useRef(g);
+  const micRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     stateRef.current = g;
   }, [g]);
 
-  const cases = useCases(vendor.id);
+  const { level, bump } = useAudioLevel(stream, listening);
+  const allCases = useCases(null);
+  const stats = useMemo(() => notebookStats(allCases.data, year), [allCases.data, year]);
+  const statsRef = useRef(stats);
+  useLayoutEffect(() => {
+    statsRef.current = stats;
+  }, [stats]);
   const sessionCases = useMemo(() => {
-    const byId = new Map(cases.data.map((c) => [c.id, c]));
+    const byId = new Map(allCases.data.map((c) => [c.id, c]));
     return sessionIds.map((id) => byId.get(id)).filter((c) => c !== undefined);
-  }, [cases.data, sessionIds]);
+  }, [allCases.data, sessionIds]);
 
-  // --- audio --------------------------------------------------------------
+  // --- audio ----------------------------------------------------------------
   const startClip = useCallback(async () => {
     if (!recordAudio || !isRecordingSupported()) return;
     recorder.current ??= new CaseRecorder();
     try {
       await recorder.current.begin();
+      setStream(recorder.current.liveStream);
     } catch (e) {
-      notify("لم يتم تشغيل التسجيل الصوتي: " + errorMessage(e), "error");
+      notify(`${t("voice.audioStartFailed")}: ${errorText(e)}`, "error");
     }
-  }, [recordAudio, notify]);
+  }, [recordAudio, notify, t, errorText]);
 
   const releaseAudio = useCallback(() => {
     recorder.current?.release();
     recorder.current = null;
+    setStream(null);
   }, []);
 
-  // --- saving -------------------------------------------------------------
-  const setFree = (t: string) => {
-    freeTextRef.current = t;
-    setFreeText(t);
+  // --- saving -----------------------------------------------------------------
+  const setFree = (txt: string) => {
+    freeTextRef.current = txt;
+    setFreeText(txt);
   };
 
   const attemptSave = useCallback(
@@ -89,8 +127,8 @@ export function VoiceLogger({ vendor }: { vendor: Vendor }) {
       setErrors(errs);
       const firstBad = CASE_FIELDS.findIndex((f) => errs[f]);
       if (firstBad >= 0) {
-        vibrate([60, 60, 60]);
-        notify(`لم يتم الحفظ: ${errs[CASE_FIELDS[firstBad]]}`, "error");
+        vibrate([50, 60, 50]);
+        notify(t("voice.notSaved", { reason: t(errs[CASE_FIELDS[firstBad]]!) }), "error");
         dispatch({ type: "goto", step: firstBad });
         return;
       }
@@ -106,23 +144,35 @@ export function VoiceLogger({ vendor }: { vendor: Vendor }) {
           transcript: transcript.join(" | "),
         }),
       );
+
+      // Celebration: milestone in this year's notebook → big petals; else sparkles.
+      const before = statsRef.current.total;
+      const inYear = Number(draft.startDate!.slice(0, 4)) === statsRef.current.year;
+      const milestone = inYear ? crossedMilestone(before, before + 1) : null;
+      const nextSession = sessionCount + 1;
+      setBurst((b) => ({ id: b.id + 1, big: !!milestone || nextSession % 10 === 0 }));
+      vibrate(milestone ? [40, 60, 40, 60, 80] : 70);
+      if (milestone) notify(name ? t("voice.milestone", { n: milestone, name }) : t("voice.milestoneNoName", { n: milestone }), "success");
+      else if (nextSession % 10 === 0) notify(t("voice.sessionMilestone", { n: nextSession }), "success");
+      else notify(t("voice.saved"), "success");
+
+      bumpSessionCount();
       setSessionIds((ids) => [id, ...ids]);
       dispatch({ type: "reset" });
       setFree("");
-      vibrate(80);
-      notify("✓ اتحفظت — قول الحالة اللي بعدها", "success");
+      setHeard("");
+      setErrors({});
+      setFlashKey(0);
 
       // Close this case's audio clip and immediately start the next one.
       const rec = recorder.current;
       if (rec?.active) {
         const blob = await rec.finish();
         if (speech.current) void startClip();
-        if (blob) {
-          repo.uploadAudio(id, blob).catch((e) => notify("الحالة اتحفظت لكن التسجيل الصوتي ما اترفعش: " + errorMessage(e), "error"));
-        }
+        if (blob) repo.uploadAudio(id, blob).catch(() => notify(t("voice.audioUploadFailed"), "error"));
       }
     },
-    [ctx, notify, track, repo, vendor.id, startClip],
+    [ctx, notify, track, repo, vendor.id, startClip, t, name, sessionCount, bumpSessionCount],
   );
 
   const saveFree = useCallback(async () => {
@@ -130,7 +180,7 @@ export function VoiceLogger({ vendor }: { vendor: Vendor }) {
     let values = stateRef.current.values;
     let transcript = stateRef.current.transcript;
     if (text) {
-      setSaving(true);
+      setBusy(true);
       try {
         const p = await getCaseParser(undefined).parse(text, ctx);
         values = {
@@ -143,22 +193,25 @@ export function VoiceLogger({ vendor }: { vendor: Vendor }) {
         transcript = [text];
         dispatch({ type: "setValues", values, transcript });
         setFree("");
+        setFlashKey((k) => k + 1);
+        // Let her see the words land in their fields before the save animation.
+        await new Promise((r) => setTimeout(r, 650));
       } catch (e) {
-        notify("فشل تحليل النص: " + errorMessage(e), "error");
+        notify(`${t("voice.parseFailed")}: ${errorText(e)}`, "error");
         return;
       } finally {
-        setSaving(false);
+        setBusy(false);
       }
     }
     await attemptSave(values, transcript);
-  }, [ctx, attemptSave, notify]);
+  }, [ctx, attemptSave, notify, t, errorText]);
 
   const save = useCallback(() => {
     if (mode === "free") void saveFree();
     else void attemptSave(stateRef.current.values, stateRef.current.transcript);
   }, [mode, saveFree, attemptSave]);
 
-  // Guided: "حفظ" said → reducer bumps saveRequested → save here.
+  // Guided: «حفظ» said → reducer bumps saveRequested → save here.
   const lastSave = useRef(g.saveRequested);
   useEffect(() => {
     if (g.saveRequested === lastSave.current) return;
@@ -166,39 +219,67 @@ export function VoiceLogger({ vendor }: { vendor: Vendor }) {
     void attemptSave(g.values, g.transcript);
   }, [g.saveRequested, g.values, g.transcript, attemptSave]);
 
-  // Haptic tick when guided mode moves to another field.
+  // Haptic tick + fresh transcript when guided mode moves to another field.
   const lastStep = useRef(g.step);
   useEffect(() => {
-    if (g.step !== lastStep.current) vibrate(25);
+    if (g.step !== lastStep.current) vibrate(20);
     lastStep.current = g.step;
   }, [g.step]);
 
-  // --- speech -------------------------------------------------------------
+  const runCommand = useCallback(
+    (cmd: VoiceCommand) => {
+      setFlash({ cmd, at: Date.now() });
+      if (cmd === "save") return save();
+      if (mode === "free") {
+        if (cmd === "clear") {
+          setFree("");
+          dispatch({ type: "setValues", values: emptyValues(), transcript: [] });
+        }
+        return;
+      }
+      dispatch({ type: "command", command: cmd });
+      if (cmd === "next" || cmd === "skip" || cmd === "back") setHeard("");
+    },
+    [mode, save],
+  );
+
+  // --- speech -----------------------------------------------------------------
   // Recognition callbacks outlive renders; route them to the latest handler.
   const onFinal = useRef<(text: string) => void>(() => {});
   useLayoutEffect(() => {
     onFinal.current = (text: string) => {
-      if (mode === "guided") return dispatch({ type: "speech", text });
+      bump();
       const { leading, body, trailing } = splitCommands(text);
+      const lastCmd = trailing[trailing.length - 1] ?? leading[leading.length - 1];
+      if (lastCmd) setFlash({ cmd: lastCmd, at: Date.now() });
+      if (mode === "guided") {
+        setHeard(body);
+        return dispatch({ type: "speech", text });
+      }
       if (leading.length || body) setFree(`${freeTextRef.current} ${body}`.trim());
       if (trailing.includes("clear")) setFree("");
       if (trailing.includes("save")) void saveFree();
     };
-  }, [mode, saveFree]);
+  }, [mode, saveFree, bump]);
 
   const listen = useCallback(() => {
     speech.current = startSpeech({
+      lang: dictation,
       keepAlive: true,
-      onFinal: (t) => onFinal.current(t),
-      onInterim: setInterim,
+      onFinal: (txt) => onFinal.current(txt),
+      onInterim: (txt) => {
+        setInterim(txt);
+        if (txt) bump();
+      },
       onListening: setListening,
-      onError: (code, msg) => {
-        notify(msg, "error");
+      onError: (code) => {
+        const key = (KNOWN_SPEECH_ERRORS as readonly string[]).includes(code) ? (`speech.${code}` as MessageKey) : null;
+        notify(key ? t(key) : t("speech.generic", { code }), "error");
         // Some phones can't share the mic between recognition and recording.
         if (code === "audio-capture" && recorder.current) {
           releaseAudio();
           setRecordAudio(false);
-          notify("تم إيقاف حفظ الصوت الأصلي على الجهاز ده — جرّب الميكروفون تاني", "info");
+          notify(t("voice.audioOffAndroid"), "info");
         }
       },
       onEnd: () => {
@@ -207,28 +288,29 @@ export function VoiceLogger({ vendor }: { vendor: Vendor }) {
       },
     });
     recorder.current?.resume();
-  }, [notify, releaseAudio, setRecordAudio]);
+  }, [dictation, notify, releaseAudio, setRecordAudio, t, bump]);
 
-  async function startSession() {
+  const startSession = useCallback(async () => {
     setOpen(true);
     if (!supported) return;
-    // Listening must not wait on the recorder's mic permission/start-up.
+    // Listening must not wait on the recorder's mic permission / start-up.
     listen();
     void startClip();
     try {
-      wakeLock.current = await (navigator as Navigator & { wakeLock?: { request(t: "screen"): Promise<WakeLock> } }).wakeLock?.request("screen") ?? null;
+      const wl = (navigator as Navigator & { wakeLock?: { request(t: "screen"): Promise<WakeLock> } }).wakeLock;
+      wakeLock.current = (await wl?.request("screen")) ?? null;
     } catch {
       /* not critical */
     }
-  }
+  }, [supported, listen, startClip]);
 
-  function toggleListening() {
+  const toggleListening = useCallback(() => {
     if (speech.current) speech.current.stop();
     else {
       if (recordAudio && !recorder.current?.active) void startClip();
       listen();
     }
-  }
+  }, [recordAudio, startClip, listen]);
 
   function endSession() {
     speech.current?.stop();
@@ -238,8 +320,24 @@ export function VoiceLogger({ vendor }: { vendor: Vendor }) {
     setOpen(false);
     dispatch({ type: "reset" });
     setFree("");
+    setHeard("");
     setErrors({});
   }
+
+  // The shell's center mic: start here, or pause/resume if already logging.
+  const onShellMic = useCallback(() => {
+    if (!open) void startSession();
+    else if (supported) toggleListening();
+  }, [open, startSession, toggleListening, supported]);
+  useClaimMic(onShellMic);
+
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStart && !autoStarted.current) {
+      autoStarted.current = true;
+      void startSession();
+    }
+  }, [autoStart, startSession]);
 
   useEffect(
     () => () => {
@@ -250,209 +348,238 @@ export function VoiceLogger({ vendor }: { vendor: Vendor }) {
     [],
   );
 
-  const parseDate = useCallback((t: string) => parseSpokenDate(t, ctx), [ctx]);
+  // Keyboard: Ctrl/Cmd+Enter saves; Space toggles the mic (outside text fields).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      const typing = el.closest("input,textarea,select,[contenteditable]");
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        save();
+      } else if (e.code === "Space" && !typing && !el.closest("button,a") && supported) {
+        e.preventDefault();
+        toggleListening();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, save, toggleListening, supported]);
+
+  // Compact header once the big mic scrolls away.
+  useEffect(() => {
+    const el = micRef.current;
+    if (!open || !el) return;
+    const io = new IntersectionObserver(([e]) => setMicInView(e.isIntersecting), { threshold: 0.1 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [open]);
+
+  const parseDate = useCallback((txt: string) => parseSpokenDate(txt, ctx), [ctx]);
   const years = useMemo(() => {
     const now = new Date().getFullYear();
     return Array.from({ length: 6 }, (_, i) => now - i);
   }, []);
 
-  const hasContent = CASE_FIELDS.some((f) => g.values[f].trim()) || freeText.trim();
+  const micState: MicState = !supported ? "typing" : !open ? "idle" : listening ? "listening" : "paused";
+  const field = CASE_FIELDS[g.step] as CaseField | undefined;
+  const filled = CASE_FIELDS.map((f) => (DATE_FIELDS.has(f) ? !!parseDate(g.values[f]) : !!g.values[f].trim()));
 
-  // --- render ---------------------------------------------------------------
-  const settings = (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      <div role="radiogroup" aria-label="طريقة الإملاء" className="flex rounded-xl bg-slate-100 p-1">
-        {(["guided", "free"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="radio"
-            aria-checked={mode === m}
-            onClick={() => {
-              setMode(m);
-              setErrors({});
-            }}
-            className={`h-8 rounded-lg px-3 font-semibold ${mode === m ? "bg-white text-teal-800 shadow-sm" : "text-slate-600"}`}
-          >
-            {m === "guided" ? "موجّه (حقل بحقل)" : "حر (مرة واحدة)"}
-          </button>
-        ))}
-      </div>
-      <label className="flex items-center gap-1.5 rounded-xl bg-slate-100 px-2 py-1">
-        <Icon name="calendar" className="h-4 w-4 text-slate-500" />
-        <span className="text-slate-600">السنة الافتراضية</span>
-        <select
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          className="h-7 rounded-md border-0 bg-white px-1 font-bold"
-          aria-label="السنة الافتراضية للتواريخ بدون سنة"
-        >
-          {years.map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
-      </label>
-      {isRecordingSupported() && supported && (
-        <label className="flex items-center gap-1.5 rounded-xl bg-slate-100 px-2 py-1.5 text-slate-600">
-          <input type="checkbox" checked={recordAudio} onChange={(e) => setRecordAudio(e.target.checked)} className="accent-teal-700" />
-          احفظ الصوت الأصلي
-        </label>
-      )}
-    </div>
-  );
-
+  // --- idle hero -----------------------------------------------------------------
   if (!open) {
     return (
-      <section className="flex flex-col items-center gap-4 rounded-3xl border border-teal-100 bg-gradient-to-b from-teal-50 to-white p-6 text-center">
+      <section className="flex flex-col items-center gap-4 py-6 text-center">
         {!supported && <UnsupportedNotice />}
-        <button
-          type="button"
-          onClick={startSession}
-          className="group flex h-28 w-28 items-center justify-center rounded-full bg-teal-700 text-white shadow-lg shadow-teal-700/30 transition hover:bg-teal-800 active:scale-95"
-          aria-label={supported ? "ابدأ تسجيل حالة بالصوت" : "ابدأ إدخال حالة بالكتابة"}
-        >
-          <Icon name={supported ? "mic" : "keyboard"} className="h-12 w-12" />
-        </button>
-        <p className="font-bold text-slate-800">{supported ? "اضغط وسجّل حالة جديدة بصوتك" : "إضافة حالة بالكتابة"}</p>
-        {settings}
+        {supported ? (
+          <MicOrb state="idle" level={level} onPress={startSession} label={t("voice.start")} />
+        ) : (
+          <motion.button
+            type="button"
+            onClick={startSession}
+            whileTap={{ scale: 0.94 }}
+            className="flex h-28 w-28 items-center justify-center rounded-full bg-gradient-to-br from-[var(--mic-1)] to-[var(--mic-2)] text-on-berry shadow-[var(--shadow-mic)]"
+            aria-label={t("vendor.typeInstead")}
+          >
+            <Keyboard className="h-11 w-11" />
+          </motion.button>
+        )}
+        <p className="text-sm font-semibold text-ink-2">{supported ? t("vendor.tapAndSpeak") : t("vendor.typeInstead")}</p>
       </section>
     );
   }
 
-  const field = CASE_FIELDS[g.step] as CaseField | undefined;
-  const prompt = mode === "free"
-    ? "قول الحالة كلها مرة واحدة: «كيس … تاسك … من 15 مارس لحد 20 مارس … ملاحظة …» ثم «حفظ»"
-    : field
-      ? FIELD_PROMPTS[field]
-      : "راجع الحقول وقول «حفظ» — أو صحّح أي حقل";
+  const promptText =
+    mode === "free" ? t("voice.prompt.free") : field ? t(PROMPT_KEYS[field], { field: "{field}" }) : t("voice.prompt.review");
+  const promptSub = mode === "free" ? t("voice.sub.free") : field ? t(`voice.sub.${field}` as MessageKey) : "";
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 rounded-3xl border border-teal-200 bg-white p-4 shadow-sm sm:p-5">
-        {!supported && <UnsupportedNotice />}
-
-        <div className="flex items-center gap-4">
-          {supported && (
-            <button
-              type="button"
-              onClick={toggleListening}
-              aria-label={listening ? "إيقاف الاستماع مؤقتاً" : "استئناف الاستماع"}
-              className={`relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition active:scale-95 ${
-                listening ? "bg-red-600 shadow-red-600/30" : "bg-teal-700 shadow-teal-700/30"
-              }`}
-            >
-              {listening && <span className="absolute inset-0 animate-ping rounded-full bg-red-500/40" />}
-              <Icon name={listening ? "stop" : "mic"} className="relative h-9 w-9" />
-            </button>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-slate-500">
-              {supported ? (listening ? "🔴 بيسمع…" : "⏸ متوقف — اضغط الميكروفون") : "إدخال بالكتابة"}
-              {mode === "guided" && <span className="ms-2">الحقل {Math.min(g.step + 1, 5)} من 5</span>}
-            </p>
-            <p className="text-lg font-bold leading-snug text-slate-900">{prompt}</p>
-          </div>
-          <Button variant="ghost" size="sm" className="self-start" onClick={endSession}>
-            إنهاء
-          </Button>
-        </div>
-
-        {supported && (
-          <div className="min-h-14 rounded-2xl bg-slate-900 px-4 py-3 text-base leading-relaxed text-white" aria-live="polite">
-            {mode === "free" && freeText && <span>{freeText} </span>}
-            {interim ? <span className="text-slate-400">{interim}</span> : !freeText || mode === "guided" ? <span className="text-slate-500">النص المسموع هيظهر هنا…</span> : null}
-          </div>
+    <section className="flex flex-col gap-5">
+      {/* Compact sticky header (scrolled past the big mic) */}
+      <AnimatePresence>
+        {!micInView && (
+          <motion.div
+            initial={{ y: -80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -80, opacity: 0 }}
+            className="fixed inset-x-0 top-0 z-40 border-b border-line bg-surface/90 px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] shadow-[var(--shadow-soft)] backdrop-blur lg:start-72"
+          >
+            <div className="mx-auto flex max-w-3xl items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-base font-bold">
+                  <Slotted text={promptText} slot="field" value={field ? FIELD_LABELS[field] : ""} />
+                </p>
+                {mode === "guided" && <PinStepper step={g.step} filled={filled} onGoto={(i) => dispatch({ type: "goto", step: i })} compact />}
+              </div>
+              {supported && <MicOrb state={micState} level={level} size="sm" onPress={toggleListening} label={listening ? t("voice.pause") : t("voice.resume")} />}
+            </div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        <FieldsPanel
-          values={g.values}
-          step={mode === "guided" ? g.step : null}
-          errors={errors}
-          ctx={ctx}
-          onSelect={(i) => mode === "guided" && g.step !== i && dispatch({ type: "goto", step: i })}
-          onChange={(f, v) => {
-            dispatch({ type: "setField", field: f, value: v });
-            if (errors[f]) setErrors((e) => ({ ...e, [f]: undefined }));
+      {/* Settings row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented<VoiceMode>
+          size="sm"
+          label={t("voice.mode.aria")}
+          value={mode}
+          onChange={(m) => {
+            setMode(m);
+            setErrors({});
           }}
-          onEnter={() => (g.step >= REVIEW_STEP - 1 ? save() : dispatch({ type: "command", command: "next" }))}
+          options={[
+            { value: "guided", label: t("voice.mode.guided") },
+            { value: "free", label: t("voice.mode.free") },
+          ]}
         />
-
-        <div className="flex flex-wrap items-center gap-2">
-          {mode === "guided" ? (
-            <>
-              <Button variant="secondary" onClick={() => dispatch({ type: "command", command: "back" })} disabled={g.step === 0}>
-                <Icon name="back" className="h-4 w-4" />
-                رجوع
-              </Button>
-              <Button variant="secondary" onClick={() => dispatch({ type: "command", command: "skip" })} disabled={g.step >= REVIEW_STEP}>
-                <Icon name="skip" className="h-4 w-4" />
-                تخطي
-              </Button>
-              <Button variant="secondary" onClick={() => dispatch({ type: "command", command: "next" })} disabled={g.step >= REVIEW_STEP}>
-                التالي
-                <Icon name="chevron" className="h-4 w-4" />
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setFree("");
-                dispatch({ type: "setValues", values: emptyValues(), transcript: [] });
-              }}
-              disabled={!hasContent}
-            >
-              مسح
-            </Button>
-          )}
-          <Button className="ms-auto min-w-28" onClick={save} disabled={saving}>
-            <Icon name="check" className="h-4 w-4" />
-            حفظ
-          </Button>
-        </div>
-
-        {supported && (
-          <p className="text-center text-xs text-slate-500">
-            أوامر صوتية:{" "}
-            {(mode === "guided" ? (["next", "skip", "back", "clear", "save"] as const) : (["clear", "save"] as const)).map((c, i) => (
-              <span key={c}>
-                {i > 0 && " • "}«{COMMAND_HINTS[c]}»
-              </span>
+        <label className="relative flex h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-sm font-bold">
+          <NotebookPen className="h-4 w-4 text-ink-3" aria-hidden />
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label={t("voice.year.aria")} className="appearance-none bg-transparent pe-1 focus:outline-none">
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
             ))}
-          </p>
+          </select>
+        </label>
+        {supported && isRecordingSupported() && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={recordAudio}
+            aria-label={t("voice.audio.aria")}
+            onClick={() => {
+              const on = !recordAudio;
+              setRecordAudio(on);
+              if (!on) releaseAudio();
+              else if (speech.current) void startClip();
+            }}
+            className={`flex h-10 items-center gap-1.5 rounded-full border px-3 text-sm font-bold transition-colors ${
+              recordAudio ? "border-transparent bg-surface-pink text-berry" : "border-line bg-surface text-ink-3"
+            }`}
+          >
+            <AudioLines className="h-4 w-4" aria-hidden />
+            {t("voice.audio")}
+            {recordAudio && <Check className="h-3.5 w-3.5" aria-hidden />}
+          </button>
         )}
-        <div className="border-t border-slate-100 pt-3">{settings}</div>
+        <button
+          type="button"
+          onClick={endSession}
+          aria-label={t("voice.end")}
+          title={t("voice.end")}
+          className="ms-auto flex h-10 min-w-10 items-center justify-center gap-1 rounded-full border border-line bg-surface text-sm font-semibold text-ink-3 hover:text-berry sm:px-3"
+        >
+          <X className="h-4 w-4" aria-hidden />
+          <span className="hidden sm:inline">{t("voice.end")}</span>
+        </button>
       </div>
 
-      {sessionCases.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h3 className="font-bold text-slate-800">
-            اتسجل في الجلسة دي ({sessionCases.length}) — راجع وصحّح بالضغط على أي حقل أو بالميكروفون جنبه
-          </h3>
-          {sessionCases.map((c, i) => (
-            <CaseCard
-              key={c.id}
-              c={c}
-              highlight={i === 0}
-              parseDate={parseDate}
-              fieldMic={(f, apply) => <FieldMic field={f} onText={apply} />}
-            />
-          ))}
+      {!supported && <UnsupportedNotice />}
+
+      {mode === "guided" && <PinStepper step={g.step} filled={filled} onGoto={(i) => dispatch({ type: "goto", step: i })} />}
+
+      <div className="text-center">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.h2
+            key={`${mode}-${g.step}-${isAr}`}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.22 }}
+            className="font-display-en text-2xl font-bold leading-snug sm:text-3xl"
+          >
+            <Slotted text={promptText} slot="field" value={field ? FIELD_LABELS[field] : ""} />
+          </motion.h2>
+        </AnimatePresence>
+        {promptSub && <p className="mt-1 text-sm text-ink-3">{promptSub}</p>}
+      </div>
+
+      {supported && (
+        <div ref={micRef} className="flex flex-col items-center gap-9 pb-2 pt-9">
+          <div className="relative">
+            <MicOrb state={micState} level={level} onPress={toggleListening} label={listening ? t("voice.pause") : t("voice.resume")} />
+            <SaveBurst id={burst.id} big={burst.big} />
+          </div>
+          <p className={`text-sm font-bold ${listening ? "text-berry" : "text-ink-3"}`}>{listening ? t("voice.listening") : t("voice.paused")}</p>
         </div>
       )}
+      {!supported && (
+        <div ref={micRef} className="relative h-2">
+          <SaveBurst id={burst.id} big={burst.big} />
+        </div>
+      )}
+
+      {supported && (
+        <TranscriptBox finalText={mode === "free" ? freeText : heard} interim={interim} placeholder={t("voice.heardPlaceholder")} />
+      )}
+
+      <CommandChips commands={mode === "guided" ? GUIDED_CMDS : FREE_CMDS} flash={flash} onCommand={runCommand} />
+
+      <FieldsPanel
+        values={g.values}
+        step={mode === "guided" ? g.step : null}
+        errors={errors}
+        ctx={ctx}
+        flashKey={flashKey}
+        onSelect={(i) => mode === "guided" && g.step !== i && dispatch({ type: "goto", step: i })}
+        onChange={(f, v) => {
+          dispatch({ type: "setField", field: f, value: v });
+          if (errors[f]) setErrors((e) => ({ ...e, [f]: undefined }));
+        }}
+        onEnter={() => (g.step >= REVIEW_STEP - 1 ? save() : runCommand("next"))}
+      />
+      {busy && <p className="text-center text-sm text-ink-3">…</p>}
+      <p className="hidden text-center text-xs text-ink-3 lg:block">{t("voice.shortcuts")}</p>
+
+      {/* This session */}
+      <div className="flex flex-col gap-3 pt-2">
+        <NotebookCard stats={stats} sessionCount={sessionCount} compact />
+        {sessionCases.length > 0 && (
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-lg font-bold">{t("voice.loggedThisSession")}</h3>
+            <span className="text-sm font-semibold text-ink-3">{sessionCases.length}</span>
+          </div>
+        )}
+        <motion.div layout className="flex flex-col gap-3">
+          <AnimatePresence initial={false}>
+            {sessionCases.map((c, i) => (
+              <motion.div key={c.id} layout initial={{ opacity: 0, y: -40, scale: 0.92 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 26 }}>
+                <CaseCard c={c} highlight={i === 0} parseDate={parseDate} fieldMic={(f, apply) => <FieldMic field={f} onText={apply} />} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
+      </div>
     </section>
   );
 }
 
 function UnsupportedNotice() {
+  const { t } = useI18n();
   return (
-    <div role="alert" className="w-full rounded-2xl border border-amber-300 bg-amber-50 p-4 text-start text-sm text-amber-900">
-      <p className="font-bold">المتصفح ده مش بيدعم التعرف على الصوت.</p>
-      <p className="mt-1">
-        استخدم <b>Google Chrome</b> أو <b>Microsoft Edge</b> (على الموبايل أو اللابتوب) عشان التسجيل بالصوت. تقدر تكمّل دلوقتي بالكتابة في نفس الحقول.
-      </p>
+    <div role="alert" className="w-full rounded-[var(--radius-card)] border border-open/30 bg-open-bg p-4 text-start text-sm text-ink">
+      <p className="font-bold">{t("voice.unsupported.title")}</p>
+      <p className="mt-1 text-ink-2">{t("voice.unsupported.body")}</p>
     </div>
   );
 }

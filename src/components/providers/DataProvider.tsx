@@ -27,7 +27,7 @@ interface DataContextValue {
 
 const DataContext = createContext<DataContextValue | null>(null);
 
-const DEMO_USER: AppUser = { uid: "demo", name: "وضع تجريبي", email: "", photoURL: null };
+const DEMO_USER: AppUser = { uid: "demo", name: "", email: "", photoURL: null };
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });

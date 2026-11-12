@@ -118,15 +118,7 @@ export function buildDraft(values: Record<CaseField, string>, ctx: DateContext):
     comments: cleanText(values.comments),
   };
   const errors = validateCaseFields(draft);
-  if (values.startDate.trim() && !startDate) errors.startDate = "مش فاهم التاريخ — قوله تاني أو اكتبه";
-  if (values.endDate.trim() && !endDate) errors.endDate = "مش فاهم التاريخ — قوله تاني أو اكتبه";
+  if (values.startDate.trim() && !startDate) errors.startDate = "err.dateNotUnderstood";
+  if (values.endDate.trim() && !endDate) errors.endDate = "err.dateNotUnderstood";
   return { draft, errors };
 }
-
-export const FIELD_PROMPTS: Record<CaseField, string> = {
-  case: "قول الـ Case (وصف المشكلة)",
-  taskBar: "قول الـ Task Bar (الإجراء المطلوب)",
-  startDate: "قول تاريخ البداية — مثلاً «15 مارس» أو «النهارده»",
-  endDate: "قول تاريخ النهاية، أو «تخطي» لو لسه مفتوحة",
-  comments: "قول الملاحظات، أو «تخطي»",
-};

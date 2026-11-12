@@ -1,15 +1,130 @@
 @import "tailwindcss";
 
+/* Evening theme = .dark on <html> (set from Settings, before paint). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Design tokens — "Rose & Berry" (light) / "Evening" (dark)
+   Semantic names; components use bg-surface, text-ink, bg-berry, …
+--------------------------------------------------------------------------- */
+:root {
+  --bg: #fcf6f1;
+  --glow-1: #f6d9e3; /* top blush glow */
+  --glow-2: #e8dcf3; /* lavender blob */
+  --surface: #fffdfb;
+  --surface-2: #f6eee9; /* nested / segmented background */
+  --surface-pink: #f8e3ea; /* tinted tile, soft buttons */
+  --line: #efe1e3;
+  --line-strong: #dcc5cd;
+  --ink: #2a1a25;
+  --ink-2: #5d4855;
+  --ink-3: #75606c;
+  --berry: #962b5b; /* primary */
+  --berry-strong: #74204a;
+  --berry-soft: #e7c4d3; /* light bars, soft fills */
+  --berry-tint: #f5dbe5; /* highlight under text, active chip */
+  --on-berry: #ffffff;
+  --mic-1: #a8346a;
+  --mic-2: #6e1e45;
+  --open: #8f4b0c;
+  --open-bg: #fce7d2;
+  --closed: #2c6a41;
+  --closed-bg: #dcefe2;
+  --danger: #b8304b;
+  --danger-bg: #fbe1e7;
+  --tooltip: #2e1f2b;
+  --on-tooltip: #fff7fb;
+  --shadow-color: 330 40% 40%;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #1e121f;
+  --glow-1: #3b1d36;
+  --glow-2: #2a1d3d;
+  --surface: #2a1a2c;
+  --surface-2: #342236;
+  --surface-pink: #44233f;
+  --line: #3e2b40;
+  --line-strong: #5a4058;
+  --ink: #f8edf3;
+  --ink-2: #dac5d1;
+  --ink-3: #a991a1;
+  --berry: #f19bc6;
+  --berry-strong: #f7b8d7;
+  --berry-soft: #6a3559;
+  --berry-tint: #4c2545;
+  --on-berry: #3a102f;
+  --mic-1: #f6afd1;
+  --mic-2: #e07fb0;
+  --open: #f3b77f;
+  --open-bg: #4a3020;
+  --closed: #93d6aa;
+  --closed-bg: #1f3f2c;
+  --danger: #ff9aae;
+  --danger-bg: #4d1e2b;
+  --tooltip: #fbeaf3;
+  --on-tooltip: #2a1a25;
+  --shadow-color: 320 60% 3%;
+  color-scheme: dark;
+}
+
 @theme inline {
-  --font-sans: var(--font-cairo), "Segoe UI", Tahoma, "Noto Sans Arabic", system-ui, sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-pink: var(--surface-pink);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-berry: var(--berry);
+  --color-berry-strong: var(--berry-strong);
+  --color-berry-soft: var(--berry-soft);
+  --color-berry-tint: var(--berry-tint);
+  --color-on-berry: var(--on-berry);
+  --color-open: var(--open);
+  --color-open-bg: var(--open-bg);
+  --color-closed: var(--closed);
+  --color-closed-bg: var(--closed-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-tooltip: var(--tooltip);
+  --color-on-tooltip: var(--on-tooltip);
+
+  --font-sans: var(--font-readex), "Segoe UI", Tahoma, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+
+  --radius-card: 1.5rem;
+  --shadow-soft: 0 1px 2px hsl(var(--shadow-color) / 0.06), 0 8px 24px -12px hsl(var(--shadow-color) / 0.18);
+  --shadow-lift: 0 2px 4px hsl(var(--shadow-color) / 0.08), 0 18px 40px -16px hsl(var(--shadow-color) / 0.35);
+  --shadow-mic: 0 14px 34px -10px color-mix(in oklab, var(--berry) 55%, transparent);
+
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html {
   -webkit-tap-highlight-color: transparent;
+  background: var(--bg);
 }
 
 body {
   font-family: var(--font-sans);
+  color: var(--ink);
+  background:
+    radial-gradient(60rem 26rem at 70% -8rem, var(--glow-1), transparent 70%),
+    radial-gradient(36rem 30rem at -10% 85%, var(--glow-2), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+  min-height: 100dvh;
+}
+
+/* English display headings use the serif (as in the design); Arabic stays sans. */
+:lang(en) .font-display-en {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 /* Latin data (codes, dates, amounts) inside RTL text */
@@ -19,12 +134,69 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Soft highlighter under a word (prompt field names, greeting name) */
+.highlight {
+  color: var(--berry);
+  background: linear-gradient(transparent 62%, var(--berry-tint) 62%, var(--berry-tint) 92%, transparent 92%);
+  padding-inline: 0.12em;
+  border-radius: 0.2em;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Organic mic aura: two morphing blobs. Scale is driven by --level (0..1). */
+@keyframes blob-morph {
+  0%,
+  100% {
+    border-radius: 58% 42% 55% 45% / 48% 58% 42% 52%;
+    transform: rotate(0deg) scale(var(--blob-scale, 1));
+  }
+  33% {
+    border-radius: 42% 58% 38% 62% / 58% 42% 58% 42%;
+    transform: rotate(120deg) scale(var(--blob-scale, 1));
+  }
+  66% {
+    border-radius: 52% 48% 62% 38% / 40% 60% 40% 60%;
+    transform: rotate(240deg) scale(var(--blob-scale, 1));
+  }
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print: formal, neutral — the manager report is the only printed page. */
 @media print {
   @page {
     size: A4;
     margin: 12mm;
   }
+  html,
   body {
-    background: white;
+    background: #fff !important;
+    color: #111 !important;
   }
 }

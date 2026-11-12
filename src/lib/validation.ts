@@ -1,7 +1,9 @@
 import { isISODate } from "./dates";
+import type { MessageKey } from "./i18n/messages";
 import type { CaseField, VendorInput } from "./types";
 
-export type FieldErrors<F extends string> = Partial<Record<F, string>>;
+/** Field → message key (translated by the UI). */
+export type FieldErrors<F extends string> = Partial<Record<F, MessageKey>>;
 
 export function validateCaseFields(c: {
   case: string;
@@ -9,26 +11,34 @@ export function validateCaseFields(c: {
   endDate: string | null | undefined;
 }): FieldErrors<CaseField> {
   const errors: FieldErrors<CaseField> = {};
-  if (!c.case.trim()) errors.case = "الـ Case مطلوب";
-  if (!c.startDate) errors.startDate = "تاريخ البداية مطلوب";
-  else if (!isISODate(c.startDate)) errors.startDate = "تاريخ غير صحيح";
+  if (!c.case.trim()) errors.case = "err.caseRequired";
+  if (!c.startDate) errors.startDate = "err.startRequired";
+  else if (!isISODate(c.startDate)) errors.startDate = "err.invalidDate";
   if (c.endDate) {
-    if (!isISODate(c.endDate)) errors.endDate = "تاريخ غير صحيح";
-    else if (c.startDate && isISODate(c.startDate) && c.endDate < c.startDate) {
-      errors.endDate = "تاريخ النهاية لازم يكون بعد أو يساوي تاريخ البداية";
-    }
+    if (!isISODate(c.endDate)) errors.endDate = "err.invalidDate";
+    else if (c.startDate && isISODate(c.startDate) && c.endDate < c.startDate) errors.endDate = "err.endBeforeStart";
   }
   return errors;
 }
 
-export function validateVendor(v: VendorInput, existingCodes: Map<string, string>, selfId?: string): FieldErrors<keyof VendorInput> {
-  const errors: FieldErrors<keyof VendorInput> = {};
-  if (!v.nameAr.trim() && !v.nameEn.trim()) errors.nameAr = "اكتب اسم المورد (عربي أو إنجليزي)";
+export interface VendorErrors {
+  nameAr?: MessageKey;
+  code?: MessageKey;
+  /** For "code taken": the vendor that already has it. */
+  codeOwnerId?: string;
+}
+
+export function validateVendor(v: VendorInput, existingCodes: Map<string, string>, selfId?: string): VendorErrors {
+  const errors: VendorErrors = {};
+  if (!v.nameAr.trim() && !v.nameEn.trim()) errors.nameAr = "vendor.err.name";
   const code = v.code.trim();
   if (code) {
-    if (!/^[A-Za-z0-9\-_/]+$/.test(code)) errors.code = "الكود: أرقام وحروف فقط";
+    if (!/^[A-Za-z0-9\-_/]+$/.test(code)) errors.code = "vendor.err.codeFormat";
     const owner = existingCodes.get(code);
-    if (owner && owner !== selfId) errors.code = "الكود ده مستخدم لمورد تاني";
+    if (owner && owner !== selfId) {
+      errors.code = "vendor.err.codeTaken";
+      errors.codeOwnerId = owner;
+    }
   }
   return errors;
 }

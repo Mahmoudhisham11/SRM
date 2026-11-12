@@ -1,111 +1,358 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useMemo, useState, type ReactNode } from "react";
+import { motion } from "motion/react";
+import { ChartColumn, ChevronLeft, ChevronRight, LogOut, Mic, Printer, Search, Settings, Store, WifiOff } from "lucide-react";
 import { useData } from "./providers/DataProvider";
-import { errorMessage, useToast } from "./providers/ToastProvider";
-import { Button, Icon, LoadingBlock, type IconName } from "./ui";
-
-const NAV: Array<{ href: string; label: string; icon: IconName }> = [
-  { href: "/", label: "الموردين", icon: "users" },
-  { href: "/reports", label: "التقارير", icon: "chart" },
-];
-
-function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/" || pathname.startsWith("/vendor");
-  return pathname.startsWith(href);
-}
+import { useToast } from "./providers/ToastProvider";
+import { FlowerMark, LangToggle, Logo, Monogram, Sheet, Button } from "./ui";
+import { useI18n } from "@/lib/i18n/useI18n";
+import { useGreetingName, useOnline, pressMic } from "@/hooks/useAppChrome";
+import { useVendors } from "@/hooks/useCollections";
+import { normalizeArabic } from "@/lib/parsing/normalize";
+import type { MessageKey } from "@/lib/i18n/messages";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { auth, demo, signOut } = useData();
-  const pathname = usePathname();
-
-  if (auth.status === "loading") {
-    return (
-      <div className="flex min-h-dvh items-center justify-center">
-        <LoadingBlock />
-      </div>
-    );
-  }
+  const { auth } = useData();
+  if (auth.status === "loading") return <Splash />;
   if (auth.status === "signedOut") return <SignIn />;
+  return <SignedInShell>{children}</SignedInShell>;
+}
 
+function Splash() {
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur print:hidden">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-slate-900" dir="ltr">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-700 text-white">
-              <Icon name="mic" className="h-4 w-4" />
-            </span>
-            <span className="hidden sm:inline">SRM Voice Log</span>
+    <div className="flex min-h-dvh items-center justify-center text-berry" role="status" aria-label="Loading">
+      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 6, ease: "linear" }}>
+        <FlowerMark className="h-12 w-12" />
+      </motion.div>
+    </div>
+  );
+}
+
+function SignedInShell({ children }: { children: ReactNode }) {
+  const [picking, setPicking] = useState(false);
+  const pathname = usePathname();
+  const onMic = () => {
+    if (!pressMic()) setPicking(true);
+  };
+  return (
+    <div className="min-h-dvh lg:flex">
+      <Sidebar onLog={onMic} />
+      <div className="min-w-0 flex-1 lg:ps-72">
+        <StatusBanners />
+        <main className="mx-auto w-full max-w-6xl px-4 pb-36 pt-2 sm:px-6 lg:px-10 lg:pb-12 lg:pt-8 print:max-w-none print:p-0">
+          {children}
+        </main>
+      </div>
+      {!pathname.startsWith("/reports/manager") && <BottomNav onMic={onMic} />}
+      <VendorPicker open={picking} onClose={() => setPicking(false)} />
+    </div>
+  );
+}
+
+function StatusBanners() {
+  const { demo } = useData();
+  const online = useOnline();
+  const { t } = useI18n();
+  if (online && !demo) return null;
+  return (
+    <div className="flex flex-col items-center gap-1 px-4 pt-3 print:hidden">
+      {!online && (
+        <p role="status" className="flex items-center gap-2 rounded-full bg-open-bg px-3 py-1.5 text-xs font-semibold text-open">
+          <WifiOff className="h-3.5 w-3.5" aria-hidden />
+          {t("offline.banner")}
+        </p>
+      )}
+      {demo && <p className="rounded-full bg-surface-2 px-3 py-1 text-xs text-ink-3">{t("demo.banner")}</p>}
+    </div>
+  );
+}
+
+/** Page top bar on phones/tablets: logo (or back + title) and quick controls. */
+export function TopBar({
+  back,
+  title,
+  actions,
+}: {
+  back?: string;
+  title?: ReactNode;
+  actions?: ReactNode;
+}) {
+  const { t, isAr } = useI18n();
+  const name = useGreetingName();
+  const BackIcon = isAr ? ChevronRight : ChevronLeft;
+  return (
+    <header className="flex items-center gap-3 py-3 lg:hidden print:hidden">
+      {back ? (
+        <Link
+          href={back}
+          aria-label={t("nav.back")}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink-2 shadow-[var(--shadow-soft)]"
+        >
+          <BackIcon className="h-5 w-5" />
+        </Link>
+      ) : (
+        <Link href="/" aria-label={t("nav.vendors")}>
+          <Logo />
+        </Link>
+      )}
+      <div className="min-w-0 flex-1 truncate text-center text-lg font-bold">{title}</div>
+      <div className="flex shrink-0 items-center gap-2">
+        {actions}
+        <LangToggle />
+        {!back && (
+          <Link
+            href="/settings"
+            aria-label={t("nav.settings")}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-pink font-bold text-berry"
+          >
+            {name ? name[0] : <Settings className="h-5 w-5" />}
           </Link>
-          <nav className="flex flex-1 items-center gap-1">
-            {NAV.map((n) => (
-              <Link
-                key={n.href}
-                href={n.href}
-                className={`flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold ${
-                  isActive(pathname, n.href) ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                <Icon name={n.icon} className="h-4 w-4" />
-                {n.label}
-              </Link>
-            ))}
-          </nav>
-          {!demo && (
-            <div className="flex items-center gap-2">
-              {auth.user.photoURL && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={auth.user.photoURL} alt="" className="h-8 w-8 rounded-full" referrerPolicy="no-referrer" />
-              )}
-              <button
-                type="button"
-                onClick={() => signOut()}
-                title={`تسجيل الخروج (${auth.user.email})`}
-                aria-label="تسجيل الخروج"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
-              >
-                <Icon name="logout" className="h-4 w-4" />
-              </button>
-            </div>
-          )}
+        )}
+      </div>
+    </header>
+  );
+}
+
+/** Desktop: page heading row with an optional back link (the sidebar holds navigation). */
+export function DesktopHeader({ back, title, actions }: { back?: string; title?: ReactNode; actions?: ReactNode }) {
+  const { t, isAr } = useI18n();
+  const BackIcon = isAr ? ChevronRight : ChevronLeft;
+  return (
+    <div className="mb-6 hidden items-center gap-4 lg:flex print:hidden">
+      {back && (
+        <Link href={back} className="flex items-center gap-1 text-sm font-semibold text-ink-3 hover:text-berry">
+          <BackIcon className="h-4 w-4" />
+          {t("nav.vendors")}
+        </Link>
+      )}
+      {title && <h1 className="font-display-en text-3xl font-bold">{title}</h1>}
+      <div className="ms-auto flex items-center gap-2">{actions}</div>
+    </div>
+  );
+}
+
+const NAV: Array<{ href: string; labelKey: MessageKey; icon: typeof Store; match: (p: string) => boolean }> = [
+  { href: "/", labelKey: "nav.vendors", icon: Store, match: (p) => p === "/" || p.startsWith("/vendor") },
+  { href: "/reports", labelKey: "nav.reports", icon: ChartColumn, match: (p) => p === "/reports" },
+  { href: "/reports/manager", labelKey: "nav.manager", icon: Printer, match: (p) => p.startsWith("/reports/manager") },
+  { href: "/settings", labelKey: "nav.settings", icon: Settings, match: (p) => p.startsWith("/settings") },
+];
+
+function Sidebar({ onLog }: { onLog: () => void }) {
+  const pathname = usePathname();
+  const { t } = useI18n();
+  const { auth, demo, signOut } = useData();
+  const name = useGreetingName();
+  const user = auth.status === "signedIn" ? auth.user : null;
+  return (
+    <aside className="fixed inset-y-0 start-0 z-30 hidden w-72 flex-col border-e border-line bg-surface/80 px-5 py-7 backdrop-blur lg:flex print:hidden">
+      <Link href="/" className="px-3">
+        <Logo full />
+      </Link>
+      <nav className="mt-10 flex flex-col gap-1">
+        {NAV.slice(0, 1).map((n) => (
+          <NavItem key={n.href} href={n.href} icon={n.icon} active={n.match(pathname)} label={t(n.labelKey)} />
+        ))}
+        <button
+          type="button"
+          onClick={onLog}
+          className="flex h-12 items-center gap-3 rounded-2xl px-4 text-start font-medium text-ink-2 transition hover:bg-surface-2"
+        >
+          <Mic className="h-5 w-5" aria-hidden />
+          {t("nav.log")}
+        </button>
+        {NAV.slice(1).map((n) => (
+          <NavItem key={n.href} href={n.href} icon={n.icon} active={n.match(pathname)} label={t(n.labelKey)} />
+        ))}
+      </nav>
+      <div className="mt-auto flex flex-col gap-4">
+        <div className="self-start">
+          <LangToggle />
         </div>
-        {demo && (
-          <div className="bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-900">
-            وضع تجريبي: البيانات محفوظة في هذا المتصفح فقط. أضف إعدادات Firebase (راجع README) للمزامنة بين الموبايل واللابتوب.
+        {user && (
+          <div className="flex items-center gap-3 rounded-2xl bg-surface-2 p-3">
+            {user.photoURL ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.photoURL} alt="" className="h-10 w-10 rounded-full" referrerPolicy="no-referrer" />
+            ) : (
+              <Monogram name={name || "S"} className="h-10 w-10 rounded-full text-base" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{name || "SRM"}</p>
+              <p className="truncate text-xs text-ink-3">{demo ? t("demo.banner").split("—")[0] : user.email}</p>
+            </div>
+            {!demo && (
+              <button type="button" onClick={() => signOut()} aria-label={t("settings.signOut")} className="rounded-full p-2 text-ink-3 hover:text-berry">
+                <LogOut className="h-4 w-4" />
+              </button>
+            )}
           </div>
         )}
-      </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 print:max-w-none print:p-0">{children}</main>
-    </div>
+      </div>
+    </aside>
+  );
+}
+
+function NavItem({ href, icon: Icon, label, active }: { href: string; icon: typeof Store; label: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={`relative flex h-12 items-center gap-3 rounded-2xl px-4 font-medium transition ${active ? "text-berry" : "text-ink-2 hover:bg-surface-2"}`}
+    >
+      {active && <motion.span layoutId="side-active" className="absolute inset-0 rounded-2xl bg-surface-pink" />}
+      <Icon className="relative h-5 w-5" aria-hidden />
+      <span className="relative">{label}</span>
+    </Link>
+  );
+}
+
+function BottomNav({ onMic }: { onMic: () => void }) {
+  const pathname = usePathname();
+  const { t } = useI18n();
+  const items = [NAV[0], NAV[1]];
+  return (
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto max-w-md lg:hidden print:hidden"
+    >
+      <div className="relative flex h-[4.5rem] items-center justify-between rounded-[2rem] border border-line bg-surface/95 px-6 shadow-[var(--shadow-lift)] backdrop-blur">
+        {items.map((n, i) => {
+          const active = n.match(pathname);
+          return (
+            <Link
+              key={n.href}
+              href={n.href}
+              aria-current={active ? "page" : undefined}
+              className={`flex w-20 flex-col items-center gap-1 text-xs font-semibold ${active ? "text-berry" : "text-ink-3"} ${i === 1 ? "order-3" : ""}`}
+            >
+              <n.icon className="h-5 w-5" aria-hidden />
+              {t(n.labelKey)}
+            </Link>
+          );
+        })}
+        <motion.button
+          type="button"
+          onClick={onMic}
+          whileTap={{ scale: 0.92 }}
+          aria-label={t("nav.log")}
+          className="order-2 -mt-10 flex h-16 w-16 items-center justify-center rounded-full border-4 border-bg bg-gradient-to-b from-[var(--mic-1)] to-[var(--mic-2)] text-on-berry shadow-[var(--shadow-mic)]"
+        >
+          <Mic className="h-7 w-7" />
+        </motion.button>
+      </div>
+    </nav>
+  );
+}
+
+/** Sheet to choose a vendor before logging (from the center mic / sidebar). */
+function VendorPicker({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t, vendorName, vendorAltName } = useI18n();
+  const router = useRouter();
+  const vendors = useVendors();
+  const [q, setQ] = useState("");
+  const list = useMemo(() => {
+    const nq = normalizeArabic(q.trim());
+    return vendors.data.filter((v) => !nq || normalizeArabic(`${v.nameAr} ${v.nameEn} ${v.code}`).includes(nq));
+  }, [vendors.data, q]);
+  return (
+    <Sheet open={open} title={t("vendors.pick")} onClose={onClose}>
+      <label className="relative mb-3 block">
+        <Search className="pointer-events-none absolute inset-y-0 start-4 my-auto h-5 w-5 text-ink-3" aria-hidden />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={t("vendors.search")}
+          aria-label={t("vendors.search")}
+          className="h-12 w-full rounded-full border border-line-strong bg-surface ps-12 pe-4 focus:outline-none focus:ring-4 focus:ring-berry-tint"
+        />
+      </label>
+      <ul className="flex flex-col gap-2">
+        {list.map((v) => (
+          <li key={v.id}>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                setQ("");
+                router.push(`/vendor?id=${encodeURIComponent(v.id)}&log=1`);
+              }}
+              className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface p-3 text-start hover:border-berry-soft"
+            >
+              <Monogram name={vendorName(v)} className="h-10 w-10 text-base" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold">{vendorName(v)}</span>
+                {vendorAltName(v) && <span className="block truncate text-xs text-ink-3">{vendorAltName(v)}</span>}
+              </span>
+              {v.code && <span className="ltr-nums rounded-lg bg-surface-2 px-2 py-1 text-xs font-semibold text-ink-2">{v.code}</span>}
+            </button>
+          </li>
+        ))}
+        {!vendors.loading && vendors.data.length === 0 && (
+          <li className="py-6 text-center text-sm text-ink-3">
+            {t("vendors.empty.title")} —{" "}
+            <Link href="/?add=1" onClick={onClose} className="font-semibold text-berry underline">
+              {t("vendors.add")}
+            </Link>
+          </li>
+        )}
+      </ul>
+    </Sheet>
   );
 }
 
 function SignIn() {
   const { signIn } = useData();
-  const { notify } = useToast();
+  const { notify, errorText } = useToast();
+  const { t } = useI18n();
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-b from-teal-50 to-white px-4">
-      <div className="w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-xl ring-1 ring-slate-200">
-        <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-700 text-white">
-          <Icon name="mic" className="h-8 w-8" />
-        </span>
-        <h1 className="text-2xl font-bold text-slate-900" dir="ltr">
+    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-6">
+      <div className="absolute end-5 top-5">
+        <LangToggle />
+      </div>
+      {/* Floating petals */}
+      {[0, 1, 2, 3, 4].map((i) => (
+        <motion.span
+          key={i}
+          aria-hidden
+          className="absolute text-berry/25"
+          style={{ left: `${12 + i * 18}%`, top: `${10 + ((i * 37) % 70)}%` }}
+          animate={{ y: [0, -14, 0], rotate: [0, 20, 0] }}
+          transition={{ duration: 5 + i, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <FlowerMark className="h-8 w-8" />
+        </motion.span>
+      ))}
+      <motion.div
+        initial={{ opacity: 0, y: 24, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: "spring", stiffness: 200, damping: 24 }}
+        className="card relative w-full max-w-sm p-8 text-center"
+      >
+        <motion.span
+          className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[1.75rem] bg-gradient-to-b from-[var(--mic-1)] to-[var(--mic-2)] text-on-berry shadow-[var(--shadow-mic)]"
+          animate={{ rotate: [0, -4, 4, 0] }}
+          transition={{ duration: 4, repeat: Infinity }}
+        >
+          <Mic className="h-9 w-9" />
+        </motion.span>
+        <h1 className="text-2xl font-bold" dir="ltr">
           SRM Voice Log
         </h1>
-        <p className="mt-2 text-slate-600">سجّل شغل الموردين اليومي بصوتك</p>
-        <Button size="lg" className="mt-8 w-full" onClick={() => signIn().catch((e) => notify(errorMessage(e), "error"))}>
-          <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-            <path fill="#fff" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.4 3-7.3Z" />
-            <path fill="#fff" opacity=".85" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z" />
-            <path fill="#fff" opacity=".7" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14Z" />
-            <path fill="#fff" opacity=".55" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 6 12 6Z" />
+        <p className="mt-2 text-ink-2">{t("app.tagline")}</p>
+        <Button size="lg" className="mt-8 w-full" onClick={() => signIn().catch((e) => notify(errorText(e), "error"))}>
+          <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
+            <path fill="currentColor" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.4 3-7.3Z" />
+            <path fill="currentColor" opacity=".8" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z" />
+            <path fill="currentColor" opacity=".65" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14Z" />
+            <path fill="currentColor" opacity=".5" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 6 12 6Z" />
           </svg>
-          الدخول بحساب Google
+          {t("signin.google")}
         </Button>
-      </div>
+      </motion.div>
     </div>
   );
 }

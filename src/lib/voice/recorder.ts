@@ -45,6 +45,11 @@ export class CaseRecorder {
     this.clip = clip;
   }
 
+  /** The live mic stream (for the level meter), once recording has started. */
+  get liveStream(): MediaStream | null {
+    return this.stream;
+  }
+
   get active(): boolean {
     return !!this.clip && this.clip.rec.state !== "inactive";
   }

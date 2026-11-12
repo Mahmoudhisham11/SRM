@@ -48,7 +48,7 @@ export class LocalRepo implements DataRepo {
     try {
       localStorage.setItem(KEY, JSON.stringify(this.store));
     } catch (e) {
-      throw new Error("مساحة التخزين المحلي امتلأت (وضع تجريبي). " + String(e));
+      throw new Error("Local storage is full (demo mode) — مساحة التخزين المحلي امتلأت. " + String(e));
     }
     this.emit();
   }
@@ -85,7 +85,7 @@ export class LocalRepo implements DataRepo {
 
   async updateVendor(id: string, input: VendorInput) {
     const v = this.store.vendors[id];
-    if (!v) throw new Error("المورد غير موجود");
+    if (!v) throw new Error("Vendor not found — المورد غير موجود");
     this.store.vendors[id] = { ...v, ...cleanVendorInput(input), updatedAt: Date.now() };
     this.commit();
   }
@@ -107,7 +107,7 @@ export class LocalRepo implements DataRepo {
 
   async updateCase(id: string, patch: CasePatch) {
     const c = this.store.cases[id];
-    if (!c) throw new Error("الحالة غير موجودة");
+    if (!c) throw new Error("Case not found — الحالة غير موجودة");
     this.store.cases[id] = { ...c, ...patchWithStatus(patch, Date.now()) } as Case;
     this.commit();
   }

@@ -3,8 +3,11 @@
 Log daily supplier-relationship (SRM) work **by voice**, in Egyptian Arabic, from your phone or laptop.
 Built for back-filling a year of notebook entries quickly, then for day-to-day logging.
 
-**Stack:** Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · Firebase (Google sign-in, Firestore, Storage) · exceljs · Vitest.
-The UI is Arabic (RTL). Field labels stay in English to match the `SRM_Issues_Log.xlsx` headers.
+**Stack:** Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · Motion (animations) · lucide icons · Firebase (Google sign-in, Firestore, Storage) · exceljs · Vitest.
+
+**Bilingual:** full Arabic (RTL, default) and English (LTR) UI, switched from the «EN | ع» toggle and remembered per device. The five field labels (Case, Task Bar, Start Date, End Date, Comments) stay in English in both languages to match the `SRM_Issues_Log.xlsx` headers. Arabic text addresses the user in the feminine form («قولي»، «اضغطي»); this can be switched to masculine in **Settings**.
+
+**Design:** "Rose & Berry" light theme plus an "Evening" dark theme (or Auto). Readex Pro for Arabic and Latin text, with Fraunces for English headings. Every screen is mobile-first: a bottom bar with a center mic on phones, a sidebar on desktop.
 
 ---
 
@@ -19,6 +22,7 @@ The UI is Arabic (RTL). Field labels stay in English to match the `SRM_Issues_Lo
 | **Reports** | One table of all cases with search, sorting and filters (vendor, date range, status, keyword). Summary tiles, cases per month and per vendor, and average resolution time. |
 | **Manager report** | This week / this month / last month / custom range. Shows totals plus a table grouped by vendor. **Print / Save as PDF.** |
 | **Export** | **Excel** in the SRM_Issues_Log format (`Case | Task Bar | Start Date | End Date | Comments`, `DD-MMM-YYYY`, Arial 10, optional **Vendor** column), plus **CSV**. |
+| **Experience** | Greeting with her name, today's count, and a «دفتر 2025» notebook ring (one petal per month), day streak and next milestone. The mic's aura follows her voice level, the chip for a recognised command flashes, and on save a check draws itself with a sparkle burst while the case drops into the session list. Milestones get a petal burst. Swipe a history row to close it today or delete it (with Undo). The phone vibrates on save and on field changes. Everything respects "reduce motion". |
 | **Quality** | Per-user security rules, offline-tolerant (Firestore cache with queued writes), and loading, empty and error states. About 210 unit tests for the parsers, reports and export, plus 11 security-rules tests against the Firebase emulators. |
 
 ---
@@ -105,8 +109,10 @@ The app asks for each field in turn: **Case → Task Bar → Start Date → End 
 | «التالي» | next field |
 | «تخطي» | clear this field and move on (e.g. no End Date yet) |
 | «رجوع» | previous field |
-| «امسح» | clear the current field |
-| «حفظ» | validate, save, and **start the next case immediately** |
+| «امسح» / «امسحي» | clear the current field |
+| «حفظ» / «احفظي» | validate, save, and **start the next case immediately** |
+
+The commands also show as tappable chips, and the one just heard flashes. Feminine forms («ارجعي»، «فوتي») and English («next», «skip», «back», «clear», «save») work too.
 
 Commands count only at the **end** of what you said («…الخامات التالي»), or at the start for navigation. That way «الشهر التالي» or «حفظ المستندات» inside a sentence stays as text.
 
@@ -141,7 +147,11 @@ Set **السنة الافتراضية** to the notebook's year. It stays set for
 
 ### Keyboard
 
-Every field is a normal input. In guided mode, **Enter** moves to the next field, and Enter on the last field saves. Date fields also have a calendar picker.
+Every field is a normal input. In guided mode, **Enter** moves to the next field, and Enter on the last field saves. **Ctrl/⌘+Enter** saves from anywhere, and **Space** pauses or resumes the mic. Date fields also have a calendar picker.
+
+### Settings
+
+Name used in the greeting · language · appearance (Light / Evening / Auto) · Arabic form of address · dictation language (Arabic-Egypt or English) · sign out.
 
 ### Browser support
 
@@ -232,19 +242,23 @@ NEXT_PUBLIC_USE_FIREBASE_EMULATORS=1
 src/
   app/                      routes: / (vendors), /vendor?id=, /reports, /reports/manager
   components/
-    AppShell.tsx            header, nav, sign-in screen, demo banner
-    providers/              auth + data repository, toasts
-    vendors/                vendor list/search, vendor page, vendor form
-    cases/CaseCard.tsx      editable review card (tap to edit, per-field mic)
-    voice/                  VoiceLogger (guided/free), FieldsPanel, FieldMic
+    AppShell.tsx            top bar + bottom nav (phone), sidebar (desktop), vendor picker, sign-in
+    ui.tsx                  design-system primitives (buttons, fields, sheet, segmented, toggles…)
+    providers/              auth + data repository, toasts, motion config
+    home/                   greeting, stats, notebook ring, vendor cards
+    vendors/                vendor page, vendor form sheet
+    cases/                  case card (compact row ↔ review card, swipe actions), audio player
+    voice/                  VoiceLogger, mic orb, stepper, chips, transcript, field cards, save burst
     reports/                reports page, manager report, charts
+    settings/               settings page
   hooks/                    live Firestore subscriptions, voice preferences
   lib/
     parsing/                normalize · numbers · arabicDates · caseParser (+ tests)
     voice/                  speech (Web Speech API), recorder (MediaRecorder), commands, guided state machine (+ tests)
     data/                   DataRepo interface · FirestoreRepo · LocalRepo (demo) · sample data
     export/                 excel (exceljs) · csv
-    reports.ts, dates.ts, validation.ts, types.ts
+    i18n/                   all UI text (Arabic f/m + English) and the useI18n hook
+    reports.ts, progress.ts, fuzzy.ts, dates.ts, validation.ts, types.ts
 firestore.rules, storage.rules, firebase.json
 tests/rules.test.ts         security-rules tests (emulators)
 ```

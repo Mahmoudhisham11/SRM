@@ -1,27 +1,21 @@
 "use client";
 
-import { Suspense, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
-import { VendorDetail } from "@/components/vendors/VendorDetail";
-import { VoiceLogger } from "@/components/voice/VoiceLogger";
-import { FieldMic } from "@/components/voice/FieldMic";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { VendorDetail } from "./VendorDetail";
 import { LoadingBlock } from "@/components/ui";
-import { useDefaultYear } from "@/hooks/useVoicePrefs";
-import { parseSpokenDate } from "@/lib/parsing/arabicDates";
 
 function VendorFromQuery() {
-  const id = useSearchParams().get("id") ?? "";
-  const [year] = useDefaultYear();
-  const parseDate = useCallback((t: string) => parseSpokenDate(t, { defaultYear: year }), [year]);
-  return (
-    <VendorDetail
-      id={id}
-      // key: a fresh logger (empty session) per vendor
-      logger={(vendor) => <VoiceLogger key={vendor.id} vendor={vendor} />}
-      fieldMic={(field, apply) => <FieldMic field={field} onText={apply} />}
-      parseDate={parseDate}
-    />
-  );
+  const params = useSearchParams();
+  const router = useRouter();
+  const id = params.get("id") ?? "";
+  // "&log=1" (from the center mic) starts logging once; drop it so a refresh doesn't.
+  const [autoStart] = useState(params.get("log") === "1");
+  useEffect(() => {
+    if (params.get("log") === "1") router.replace(`/vendor?id=${encodeURIComponent(id)}`);
+  }, [params, router, id]);
+  // key: a fresh page (and empty logging session) per vendor
+  return <VendorDetail key={id} id={id} autoStart={autoStart} />;
 }
 
 export function VendorPageClient() {

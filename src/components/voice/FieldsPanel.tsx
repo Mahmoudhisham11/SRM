@@ -1,22 +1,26 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
-import { Icon } from "@/components/ui";
+import { motion, useAnimate } from "motion/react";
+import { Calendar, Check, CircleAlert, Mic } from "lucide-react";
 import { formatDMY } from "@/lib/dates";
 import { parseSpokenDate, type DateContext } from "@/lib/parsing/arabicDates";
+import { useI18n } from "@/lib/i18n/useI18n";
+import type { MessageKey } from "@/lib/i18n/messages";
 import { CASE_FIELDS, DATE_FIELDS, FIELD_LABELS, type CaseField } from "@/lib/types";
 import type { FieldErrors } from "@/lib/validation";
 
 /**
- * The five fields of the case being dictated. Each is also a normal input, so
- * everything can be done by keyboard. In guided mode the current field is
- * highlighted, and tapping a row moves dictation to it.
+ * The five fields of the case being dictated, as cards. Each is a normal
+ * input too (keyboard fallback). In guided mode the current card is
+ * highlighted, and tapping a card (or its mic) moves dictation there.
  */
 export function FieldsPanel({
   values,
   step,
   errors,
   ctx,
+  flashKey,
   onSelect,
   onChange,
   onEnter,
@@ -26,14 +30,14 @@ export function FieldsPanel({
   step: number | null;
   errors: FieldErrors<CaseField>;
   ctx: DateContext;
+  /** Bump to make filled cards pulse in sequence (free mode: words "fly" into fields). */
+  flashKey: number;
   onSelect: (index: number) => void;
   onChange: (field: CaseField, value: string) => void;
-  /** Enter pressed in a single-line field (guided: go to next). */
   onEnter: () => void;
 }) {
-  // Keyboard flow: when the step moves (Enter / "التالي") and the user is
-  // typing in this panel, move the caret to the new field. When dictating by
-  // voice nothing is focused, so the phone keyboard doesn't pop up.
+  // Keyboard flow: when the step moves and she's typing in this panel, move the caret
+  // to the new field. When dictating nothing is focused, so the phone keyboard stays down.
   const listRef = useRef<HTMLOListElement>(null);
   useEffect(() => {
     const list = listRef.current;
@@ -42,10 +46,11 @@ export function FieldsPanel({
     if (target && target !== document.activeElement) target.focus();
   }, [step]);
 
+  let filledIndex = 0;
   return (
-    <ol ref={listRef} className="flex flex-col gap-2">
+    <ol ref={listRef} className="flex flex-col gap-2.5">
       {CASE_FIELDS.map((field, i) => (
-        <FieldRow
+        <FieldCard
           key={field}
           field={field}
           index={i}
@@ -53,6 +58,8 @@ export function FieldsPanel({
           current={step === i}
           error={errors[field]}
           ctx={ctx}
+          flashKey={flashKey}
+          flashOrder={values[field].trim() ? filledIndex++ : 0}
           onSelect={() => onSelect(i)}
           onChange={(v) => onChange(field, v)}
           onEnter={onEnter}
@@ -62,13 +69,15 @@ export function FieldsPanel({
   );
 }
 
-function FieldRow({
+function FieldCard({
   field,
   index,
   value,
   current,
   error,
   ctx,
+  flashKey,
+  flashOrder,
   onSelect,
   onChange,
   onEnter,
@@ -77,37 +86,75 @@ function FieldRow({
   index: number;
   value: string;
   current: boolean;
-  error?: string;
+  error?: MessageKey;
   ctx: DateContext;
+  flashKey: number;
+  flashOrder: number;
   onSelect: () => void;
   onChange: (v: string) => void;
   onEnter: () => void;
 }) {
+  const { t, isAr } = useI18n();
   const id = useId();
   const isDate = DATE_FIELDS.has(field);
   const parsed = isDate && value.trim() ? parseSpokenDate(value, ctx) : null;
   const required = field === "case" || field === "startDate";
+  const filled = isDate ? !!parsed : !!value.trim();
+  const dateUnclear = isDate && !!value.trim() && !parsed;
+
+  // Imperative so the <li> never remounts (that would drop keyboard focus).
+  const [scope, animate] = useAnimate<HTMLLIElement>();
+  const seen = useRef({ flashKey, error });
+  useEffect(() => {
+    const prev = seen.current;
+    seen.current = { flashKey, error };
+    if (!scope.current) return;
+    if (flashKey !== prev.flashKey && flashKey > 0 && value.trim()) {
+      void animate(scope.current, { backgroundColor: ["var(--surface)", "var(--berry-tint)", "var(--surface)"] }, { duration: 0.7, delay: flashOrder * 0.09 });
+    }
+    if (error && error !== prev.error && !dateUnclear) void animate(scope.current, { x: [0, -6, 6, -4, 4, 0] }, { duration: 0.4 });
+  }, [flashKey, error, value, flashOrder, dateUnclear, animate, scope]);
 
   return (
-    <li
-      className={`rounded-xl border p-3 transition-colors ${
-        current ? "border-teal-500 bg-teal-50/60 ring-2 ring-teal-100" : error ? "border-red-300 bg-red-50/40" : "border-slate-200 bg-white"
-      }`}
+    <motion.li
+      ref={scope}
+      layout
       onClick={onSelect}
+      className={`rounded-[1.25rem] border bg-surface p-4 shadow-[var(--shadow-soft)] transition-[border-color,box-shadow] ${
+        current ? "border-berry ring-4 ring-berry-tint" : error ? "border-danger/60" : "border-line"
+      }`}
     >
-      <div className="mb-1 flex items-center gap-2">
+      <div className="mb-1.5 flex items-center gap-2">
         <span
-          className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-            current ? "bg-teal-700 text-white" : value ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+            current ? "bg-berry text-on-berry" : "bg-surface-2 text-ink-3"
           }`}
         >
-          {value ? <Icon name="check" className="h-3.5 w-3.5" /> : index + 1}
+          {index + 1}
         </span>
-        <label htmlFor={id} className="text-sm font-bold text-slate-800" dir="ltr">
+        <label htmlFor={id} className="text-sm font-bold" dir="ltr">
           {FIELD_LABELS[field]}
-          {required && <span className="text-red-500">*</span>}
+          {required && <span className="text-danger">*</span>}
         </label>
-        {current && <span className="ms-auto text-xs font-semibold text-teal-700">◀ بيسمع هنا</span>}
+        {isAr && <span className="text-xs text-ink-3">{t(`voice.fieldHint.${field}` as MessageKey)}</span>}
+        <span className="ms-auto flex items-center gap-1">
+          {filled && (
+            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="flex h-6 w-6 items-center justify-center rounded-full bg-closed-bg text-closed" aria-hidden>
+              <Check className="h-3.5 w-3.5" />
+            </motion.span>
+          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect();
+            }}
+            aria-label={t("case.redictate", { field: FIELD_LABELS[field] })}
+            className={`flex h-8 w-8 items-center justify-center rounded-full ${current ? "text-berry" : "text-ink-3 hover:text-berry"}`}
+          >
+            <Mic className="h-4 w-4" />
+          </button>
+        </span>
       </div>
 
       {field === "comments" ? (
@@ -118,10 +165,10 @@ function FieldRow({
           value={value}
           onFocus={onSelect}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-600/30"
+          className="w-full resize-none rounded-xl bg-transparent px-1 text-lg leading-relaxed focus:bg-surface-2 focus:outline-none"
         />
       ) : (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <input
             id={id}
             data-field-input
@@ -134,34 +181,53 @@ function FieldRow({
                 onEnter();
               }
             }}
-            placeholder={isDate ? "15 مارس / 15/3 / النهارده" : ""}
+            placeholder={isDate ? t("voice.datePlaceholder") : ""}
             enterKeyHint="next"
-            className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 text-base focus:outline-none focus:ring-2 focus:ring-teal-600/30"
+            className="h-10 min-w-0 flex-1 rounded-xl bg-transparent px-1 text-lg placeholder:text-base placeholder:text-ink-3 focus:bg-surface-2 focus:outline-none"
           />
           {isDate && (
-            <input
-              type="date"
-              aria-label={`اختيار ${FIELD_LABELS[field]} من التقويم`}
-              value={parsed ?? ""}
-              onChange={(e) => onChange(e.target.value)}
-              className="h-10 w-[8.5rem] shrink-0 rounded-lg border border-slate-300 bg-white px-1 text-sm"
-            />
+            // The native date input sits invisibly on top of the icon, so tapping opens the OS picker.
+            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-2">
+              <Calendar className="h-4 w-4" aria-hidden />
+              <input
+                type="date"
+                aria-label={t("voice.pickDate", { field: FIELD_LABELS[field] })}
+                value={parsed ?? ""}
+                onChange={(e) => onChange(e.target.value)}
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
+            </span>
           )}
         </div>
       )}
 
       {isDate && value.trim() && (
-        <p className={`mt-1 text-xs font-semibold ${parsed ? "text-emerald-700" : "text-red-600"}`}>
+        <motion.p
+          key={parsed ?? "bad"}
+          initial={{ opacity: 0, scale: 0.8, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 500, damping: 18 }}
+          className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${parsed ? "bg-closed-bg text-closed" : "bg-danger-bg text-danger"}`}
+        >
           {parsed ? (
             <>
-              ✓ <span className="ltr-nums">{formatDMY(parsed)}</span>
+              <span className="ltr-nums">{formatDMY(parsed)}</span>
+              <Check className="h-3.5 w-3.5" aria-hidden />
             </>
           ) : (
-            "⚠ مش فاهم التاريخ"
+            <>
+              <CircleAlert className="h-3.5 w-3.5" aria-hidden />
+              {t("voice.dateNotUnderstood")}
+            </>
           )}
+        </motion.p>
+      )}
+      {error && !dateUnclear && (
+        <p className="mt-1.5 flex items-center gap-1 text-xs font-semibold text-danger">
+          <CircleAlert className="h-3.5 w-3.5" aria-hidden />
+          {t(error)}
         </p>
       )}
-      {error && !(isDate && value.trim() && !parsed) && <p className="mt-1 text-xs font-semibold text-red-600">{error}</p>}
-    </li>
+    </motion.li>
   );
 }
