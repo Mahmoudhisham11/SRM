@@ -19,8 +19,9 @@ import { useI18n } from "@/lib/i18n/useI18n";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { getCaseParser } from "@/lib/parsing/caseParser";
 import { parseSpokenDate } from "@/lib/parsing/arabicDates";
-import { buildDraft, emptyValues, guidedReducer, initialGuidedState, REVIEW_STEP } from "@/lib/voice/guided";
-import { splitCommands, type VoiceCommand } from "@/lib/voice/commands";
+import { buildDraft, emptyValues, guidedReducer, initialGuidedState, mergeFix, REVIEW_STEP } from "@/lib/voice/guided";
+import { splitAtSaves, splitCommands, type VoiceCommand } from "@/lib/voice/commands";
+import { uploadAudioReliably } from "@/lib/data/audioUpload";
 import { KNOWN_SPEECH_ERRORS, startSpeech, type SpeechHandle } from "@/lib/voice/speech";
 import { CaseRecorder, isRecordingSupported } from "@/lib/voice/recorder";
 import { crossedMilestone, notebookStats } from "@/lib/progress";
@@ -39,6 +40,10 @@ type WakeLock = { release(): Promise<void> };
 
 const GUIDED_CMDS: VoiceCommand[] = ["next", "skip", "back", "clear", "save"];
 const FREE_CMDS: VoiceCommand[] = ["clear", "save"];
+/** Free mode only listens for these, so words like «التالي» stay in the text. */
+const FREE_CMD_SET: ReadonlySet<VoiceCommand> = new Set(FREE_CMDS);
+/** Storage isn't set up for this project: stop recording instead of failing every case. */
+const STORAGE_MISSING = /bucket-not-found|project-not-found|storage\/disabled/;
 const PROMPT_KEYS: Record<CaseField, MessageKey> = {
   case: "voice.prompt.case",
   taskBar: "voice.prompt.taskBar",
@@ -82,6 +87,12 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
   const recorder = useRef<CaseRecorder | null>(null);
   const wakeLock = useRef<WakeLock | null>(null);
   const freeTextRef = useRef("");
+  /** Free mode: the last save failed, so the next utterance FIXES the parsed fields instead of replacing them. */
+  const fixingRef = useRef(false);
+  /** Cases said in one breath («… حفظ كيس …»): the ones still to process after the current save. */
+  const queuedRef = useRef<string[]>([]);
+  // Recognition callbacks outlive renders; route them to the latest handler.
+  const onFinal = useRef<(text: string, queued?: boolean) => void>(() => {});
   const stateRef = useRef(g);
   const micRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -125,7 +136,7 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
   };
 
   const attemptSave = useCallback(
-    async (values: Record<CaseField, string>, transcript: string[]) => {
+    async (values: Record<CaseField, string>, transcript: string[]): Promise<boolean> => {
       const { draft, errors: errs } = buildDraft(values, ctx);
       setErrors(errs);
       const firstBad = CASE_FIELDS.findIndex((f) => errs[f]);
@@ -133,8 +144,13 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
         vibrate([50, 60, 50]);
         notify(t("voice.notSaved", { reason: t(errs[CASE_FIELDS[firstBad]]!) }), "error");
         dispatch({ type: "goto", step: firstBad });
-        return;
+        fixingRef.current = true;
+        // Cases said after this one in the same breath: show them instead of losing them.
+        const rest = queuedRef.current.splice(0);
+        if (rest.length) notify(t("voice.restNotSaved", { text: rest.join(" … ") }), "info");
+        return false;
       }
+      fixingRef.current = false;
       const id = repo.newCaseId();
       track(
         repo.createCase(id, {
@@ -173,22 +189,29 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
         const blob = await rec.finish();
         if (speech.current) void startClip();
         if (blob) {
-          repo.uploadAudio(id, blob).catch((e) => {
-            const code = String((e as { code?: string })?.code ?? "");
-            // Storage not set up for this project → stop recording instead of failing every case.
-            if (/bucket-not-found|project-not-found|storage\/unknown|storage\/disabled|unauthorized/.test(code)) {
-              setRecordAudio(false);
-              releaseAudio();
-              notify(t("voice.audioStorageOff"), "info");
-            } else notify(t("voice.audioUploadFailed"), "error");
+          // Offline / flaky network: the clip is kept on the device and uploaded later.
+          uploadAudioReliably(repo, id, blob).then((r) => {
+            if (r.status === "queued") notify(t("voice.audioQueued"), "info");
+            else if (r.status === "failed") {
+              if (STORAGE_MISSING.test(r.code)) {
+                setRecordAudio(false);
+                releaseAudio();
+                notify(t("voice.audioStorageOff"), "info");
+              } else notify(t("voice.audioUploadFailed"), "error");
+            }
           });
         }
       }
+
+      // Next case from the same utterance («… حفظ كيس …»).
+      const next = queuedRef.current.shift();
+      if (next) setTimeout(() => onFinal.current(next, true), 0);
+      return true;
     },
     [ctx, notify, track, repo, vendor.id, startClip, t, name, sessionCount, bumpSessionCount, setRecordAudio, releaseAudio],
   );
 
-  const saveFree = useCallback(async () => {
+  const saveFree = useCallback(async (): Promise<boolean> => {
     const text = freeTextRef.current.trim();
     let values = stateRef.current.values;
     let transcript = stateRef.current.transcript;
@@ -196,14 +219,20 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
       setBusy(true);
       try {
         const p = await getCaseParser(undefined).parse(text, ctx);
-        values = {
-          case: p.case,
-          taskBar: p.taskBar,
-          startDate: p.startDate ?? p.startDateText,
-          endDate: p.endDate ?? p.endDateText,
-          comments: p.comments,
-        };
-        transcript = [text];
+        if (fixingRef.current && !p.caseExplicit) {
+          // Fixing a case that failed to save: only fill/replace what was just said.
+          values = mergeFix(stateRef.current.values, p);
+          transcript = [...stateRef.current.transcript, text];
+        } else {
+          values = {
+            case: p.case,
+            taskBar: p.taskBar,
+            startDate: p.startDate ?? p.startDateText,
+            endDate: p.endDate ?? p.endDateText,
+            comments: p.comments,
+          };
+          transcript = [text];
+        }
         dispatch({ type: "setValues", values, transcript });
         setFree("");
         setFlashKey((k) => k + 1);
@@ -211,12 +240,12 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
         await new Promise((r) => setTimeout(r, 650));
       } catch (e) {
         notify(`${t("voice.parseFailed")}: ${errorText(e)}`, "error");
-        return;
+        return false;
       } finally {
         setBusy(false);
       }
     }
-    await attemptSave(values, transcript);
+    return attemptSave(values, transcript);
   }, [ctx, attemptSave, notify, t, errorText]);
 
   const save = useCallback(() => {
@@ -246,6 +275,7 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
       if (mode === "free") {
         if (cmd === "clear") {
           setFree("");
+          fixingRef.current = false;
           dispatch({ type: "setValues", values: emptyValues(), transcript: [] });
         }
         return;
@@ -257,20 +287,28 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
   );
 
   // --- speech -----------------------------------------------------------------
-  // Recognition callbacks outlive renders; route them to the latest handler.
-  const onFinal = useRef<(text: string) => void>(() => {});
   useLayoutEffect(() => {
-    onFinal.current = (text: string) => {
+    onFinal.current = (raw: string, queued = false) => {
       bump();
-      const { leading, body, trailing } = splitCommands(text);
+      let text = raw;
+      if (!queued) {
+        // Several cases in one breath: handle the first now, the rest after each save.
+        const [first, ...rest] = splitAtSaves(raw);
+        text = first;
+        queuedRef.current.push(...rest);
+      }
+      const { leading, body, trailing } = splitCommands(text, mode === "free" ? FREE_CMD_SET : undefined);
       const lastCmd = trailing[trailing.length - 1] ?? leading[leading.length - 1];
       if (lastCmd) setFlash({ cmd: lastCmd, at: Date.now() });
       if (mode === "guided") {
         setHeard(body);
         return dispatch({ type: "speech", text });
       }
-      if (leading.length || body) setFree(`${freeTextRef.current} ${body}`.trim());
-      if (trailing.includes("clear")) setFree("");
+      if (body) setFree(`${freeTextRef.current} ${body}`.trim());
+      if (trailing.includes("clear")) {
+        setFree("");
+        fixingRef.current = false;
+      }
       if (trailing.includes("save")) void saveFree();
     };
   }, [mode, saveFree, bump]);
@@ -332,6 +370,8 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
     wakeLock.current = null;
     setOpen(false);
     dispatch({ type: "reset" });
+    fixingRef.current = false;
+    queuedRef.current = [];
     setFree("");
     setHeard("");
     setErrors({});
@@ -458,6 +498,7 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
           onChange={(m) => {
             setMode(m);
             setErrors({});
+            fixingRef.current = false;
           }}
           options={[
             { value: "guided", label: t("voice.mode.guided") },

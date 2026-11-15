@@ -3,6 +3,32 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { useI18n } from "@/lib/i18n/useI18n";
+import { audioStore, LOCAL_AUDIO_PREFIX } from "@/lib/data/audioStore";
+
+/** Demo-mode clips live in IndexedDB: turn "local-audio:<id>" into a playable blob URL. */
+function usePlayableSrc(src: string): string | undefined {
+  const isLocal = src.startsWith(LOCAL_AUDIO_PREFIX);
+  const [local, setLocal] = useState<{ src: string; url: string } | null>(null);
+  useEffect(() => {
+    if (!isLocal) return;
+    let url: string | null = null;
+    let cancelled = false;
+    audioStore
+      .get("clips", src.slice(LOCAL_AUDIO_PREFIX.length))
+      .then((blob) => {
+        if (!blob || cancelled) return;
+        url = URL.createObjectURL(blob);
+        setLocal({ src, url });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [src, isLocal]);
+  if (!isLocal) return src;
+  return local?.src === src ? local.url : undefined;
+}
 
 /** Deterministic bar heights from the case id (the real waveform needs CORS on Storage). */
 function bars(seed: string, n = 38): number[] {
@@ -25,6 +51,7 @@ export function AudioPlayer({ src, seed }: { src: string; seed: string }) {
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const heights = useMemo(() => bars(seed), [seed]);
+  const playable = usePlayableSrc(src);
   const progress = duration > 0 ? time / duration : 0;
 
   useEffect(() => {
@@ -67,7 +94,7 @@ export function AudioPlayer({ src, seed }: { src: string; seed: string }) {
 
   return (
     <div className="flex items-center gap-3 rounded-full bg-surface-2 p-1.5 pe-4" dir="ltr">
-      <audio ref={audio} src={src} preload="metadata" />
+      <audio ref={audio} src={playable} preload="metadata" />
       <button
         type="button"
         onClick={() => (playing ? audio.current?.pause() : audio.current?.play())}

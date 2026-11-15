@@ -6,7 +6,7 @@
  * `CASE_PARSERS`, and select it by id (see README → "Plugging in an LLM parser").
  */
 import { cleanSpaces, normalizeArabic, tokenize, type Token } from "./normalize";
-import { readDate, type DateContext } from "./arabicDates";
+import { readDate, rollEndDateForward, type DateContext } from "./arabicDates";
 import { replaceSpokenNumbers } from "./numbers";
 
 export interface ParsedCase {
@@ -19,6 +19,8 @@ export interface ParsedCase {
   /** The text the date was read from, for showing the user what was heard. */
   startDateText: string;
   endDateText: string;
+  /** True when the Case was introduced by a «كيس» keyword (not just leading text). */
+  caseExplicit: boolean;
 }
 
 export interface CaseParser {
@@ -32,7 +34,7 @@ type DateField = "startDate" | "endDate";
 
 const TEXT_MARKERS: Array<[TextField, string[]]> = [
   ["case", ["كيس", "الكيس", "كايس", "case"]],
-  ["taskBar", ["تاسك بار", "التاسك بار", "تاسك", "التاسك", "task bar", "taskbar", "task", "المهمة", "مهمة"]],
+  ["taskBar", ["تاسك باي", "التاسك باي", "task by", "تاسك بار", "التاسك بار", "تاسك", "التاسك", "task bar", "taskbar", "task", "المهمة", "مهمة"]],
   ["comments", ["ملاحظة", "ملاحظات", "الملاحظات", "كومنت", "كومنتس", "الكومنت", "comment", "comments", "تعليق"]],
 ];
 
@@ -87,7 +89,9 @@ export class RuleBasedCaseParser implements CaseParser {
     const result: ParsedCase = {
       case: "", taskBar: "", comments: "",
       startDate: null, endDate: null, startDateText: "", endDateText: "",
+      caseExplicit: false,
     };
+    let endYearInferred = false;
     // Text before any marker is the Case; text after a date goes to Comments.
     let current: TextField = "case";
     let sawExplicitCase = false;
@@ -101,6 +105,7 @@ export class RuleBasedCaseParser implements CaseParser {
         if (d && !result[m.field]) {
           result[m.field] = d.iso;
           result[`${m.field}Text` as const] = tokens.slice(i, d.end).map((t) => t.raw).join(" ");
+          if (m.field === "endDate") endYearInferred = !!d.yearInferred;
           i = d.end;
           current = "comments";
           continue;
@@ -120,6 +125,8 @@ export class RuleBasedCaseParser implements CaseParser {
       i++;
     }
 
+    result.endDate = rollEndDateForward(result.startDate, result.endDate, endYearInferred);
+    result.caseExplicit = sawExplicitCase;
     result.case = cleanText(buckets.case.join(" "));
     result.taskBar = cleanText(buckets.taskBar.join(" "));
     result.comments = cleanText(buckets.comments.join(" "));

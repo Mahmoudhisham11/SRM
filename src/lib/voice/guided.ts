@@ -1,13 +1,13 @@
 /**
  * Guided-mode state machine (pure, unit-tested).
  *
- * The app asks for one field at a time: Case → Task Bar → Start Date →
+ * The app asks for one field at a time: Case → Task By → Start Date →
  * End Date → Comments → review. Speech is appended to the current field;
  * commands move between fields. "حفظ" is surfaced as `saveRequested` so the
  * component can validate and persist, then `reset` for the next case.
  */
-import { parseSpokenDate, type DateContext } from "../parsing/arabicDates";
-import { cleanText } from "../parsing/caseParser";
+import { parseSpokenDate, parseSpokenEndDate, type DateContext } from "../parsing/arabicDates";
+import { cleanText, type ParsedCase } from "../parsing/caseParser";
 import { CASE_FIELDS, DATE_FIELDS, type CaseField } from "../types";
 import { validateCaseFields, type FieldErrors } from "../validation";
 import { splitCommands, type VoiceCommand } from "./commands";
@@ -109,7 +109,7 @@ export function buildDraft(values: Record<CaseField, string>, ctx: DateContext):
   errors: FieldErrors<CaseField>;
 } {
   const startDate = values.startDate.trim() ? parseSpokenDate(values.startDate, ctx) : null;
-  const endDate = values.endDate.trim() ? parseSpokenDate(values.endDate, ctx) : null;
+  const endDate = values.endDate.trim() ? parseSpokenEndDate(values.endDate, startDate, ctx) : null;
   const draft: CaseDraft = {
     case: cleanText(values.case),
     taskBar: cleanText(values.taskBar),
@@ -121,4 +121,25 @@ export function buildDraft(values: Record<CaseField, string>, ctx: DateContext):
   if (values.startDate.trim() && !startDate) errors.startDate = "err.dateNotUnderstood";
   if (values.endDate.trim() && !endDate) errors.endDate = "err.dateNotUnderstood";
   return { draft, errors };
+}
+
+/**
+ * Free mode, after a failed save: merge what was just said into the fields
+ * already on screen instead of replacing them («من 15 مارس» only sets the
+ * Start Date). Text without a keyword goes to Comments, since the Case is set.
+ */
+export function mergeFix(prev: Record<CaseField, string>, p: ParsedCase): Record<CaseField, string> {
+  const out = { ...prev };
+  const join = (a: string, b: string) => [a.trim(), b.trim()].filter(Boolean).join(" ");
+  if (p.case) {
+    if (!prev.case.trim()) out.case = p.case;
+    else out.comments = join(out.comments, p.case);
+  }
+  if (p.taskBar) out.taskBar = p.taskBar;
+  if (p.startDate || p.startDateText) out.startDate = p.startDate ?? p.startDateText;
+  // Keep the spoken words when the Start Date wasn't re-said, so the End Date
+  // is read against the existing Start Date (New Year rollover).
+  if (p.endDate || p.endDateText) out.endDate = p.startDate ? (p.endDate ?? p.endDateText) : p.endDateText;
+  if (p.comments) out.comments = join(out.comments, p.comments);
+  return out;
 }

@@ -1,5 +1,9 @@
-// SRM Voice Log — Service Worker for PWA
-const CACHE_NAME = "srm-voice-v1";
+// SRM Voice Log — Service Worker for PWA (registered in production builds only).
+// Bump CACHE_VERSION when this file's caching rules change: the old cache is
+// deleted on activate. App code needs no bump — pages are network-first and
+// /_next/static files have content-hashed names.
+const CACHE_VERSION = 2;
+const CACHE_NAME = `srm-voice-v${CACHE_VERSION}`;
 
 const PRECACHE_ASSETS = [
   "/",
@@ -7,7 +11,7 @@ const PRECACHE_ASSETS = [
   "/icons/icon-192x192.png",
   "/icons/icon-512x512.png",
   "/icons/apple-touch-icon.png",
-  "/manifest.json",
+  "/manifest.webmanifest",
 ];
 
 // URLs that should NEVER be cached (Firebase Firestore, Auth, Storage APIs)
@@ -57,8 +61,8 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
 
-  // Skip non-http(s) schemes (like chrome-extension://)
-  if (!url.protocol.startsWith("http")) return;
+  // Only this app's own files (and skip chrome-extension:// etc.)
+  if (url.origin !== self.location.origin) return;
 
   // Bypass Firebase & Google Auth API calls entirely
   if (BYPASS_URL_PATTERNS.some((pattern) => url.hostname.includes(pattern))) {

@@ -4,7 +4,7 @@ import { useEffect, useId, useRef } from "react";
 import { motion, useAnimate } from "motion/react";
 import { Calendar, Check, CircleAlert, Mic } from "lucide-react";
 import { formatDMY } from "@/lib/dates";
-import { parseSpokenDate, type DateContext } from "@/lib/parsing/arabicDates";
+import { parseSpokenDate, parseSpokenEndDate, type DateContext } from "@/lib/parsing/arabicDates";
 import { useI18n } from "@/lib/i18n/useI18n";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { CASE_FIELDS, DATE_FIELDS, FIELD_LABELS, type CaseField } from "@/lib/types";
@@ -47,6 +47,7 @@ export function FieldsPanel({
   }, [step]);
 
   let filledIndex = 0;
+  const startIso = values.startDate.trim() ? parseSpokenDate(values.startDate, ctx) : null;
   return (
     <ol ref={listRef} className="flex flex-col gap-2.5">
       {CASE_FIELDS.map((field, i) => (
@@ -58,6 +59,7 @@ export function FieldsPanel({
           current={step === i}
           error={errors[field]}
           ctx={ctx}
+          startIso={startIso}
           flashKey={flashKey}
           flashOrder={values[field].trim() ? filledIndex++ : 0}
           onSelect={() => onSelect(i)}
@@ -76,6 +78,7 @@ function FieldCard({
   current,
   error,
   ctx,
+  startIso,
   flashKey,
   flashOrder,
   onSelect,
@@ -88,6 +91,8 @@ function FieldCard({
   current: boolean;
   error?: MessageKey;
   ctx: DateContext;
+  /** Parsed Start Date, so the End Date preview handles New Year rollover. */
+  startIso: string | null;
   flashKey: number;
   flashOrder: number;
   onSelect: () => void;
@@ -97,7 +102,7 @@ function FieldCard({
   const { t, isAr } = useI18n();
   const id = useId();
   const isDate = DATE_FIELDS.has(field);
-  const parsed = isDate && value.trim() ? parseSpokenDate(value, ctx) : null;
+  const parsed = !isDate || !value.trim() ? null : field === "endDate" ? parseSpokenEndDate(value, startIso, ctx) : parseSpokenDate(value, ctx);
   const required = field === "case" || field === "startDate";
   const filled = isDate ? !!parsed : !!value.trim();
   const dateUnclear = isDate && !!value.trim() && !parsed;

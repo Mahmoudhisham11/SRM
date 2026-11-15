@@ -1,21 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Printer } from "lucide-react";
+import { Download } from "lucide-react";
 import { DesktopHeader, TopBar } from "@/components/AppShell";
 import { useData } from "@/components/providers/DataProvider";
+import { useToast } from "@/components/providers/ToastProvider";
+import { downloadBlob, managerReportFileName } from "@/lib/export/exportRows";
 import { Button, ErrorState, LoadingBlock, Segmented } from "@/components/ui";
 import { useCases, useVendorMap, useVendors } from "@/hooks/useCollections";
 import { useGreetingName } from "@/hooks/useAppChrome";
 import { useI18n } from "@/lib/i18n/useI18n";
 import { usePendingDeletes } from "@/lib/data/pendingDeletes";
 import { formatDMY, todayISO } from "@/lib/dates";
+import { FIELD_LABELS } from "@/lib/types";
 import { buildPeriodReport, presetRange, resolutionDays, type RangePreset } from "@/lib/reports";
 
 /**
  * Manager report. The controls use the app's styling; the report itself is
  * deliberately neutral and formal (fixed grays, no theme colours) — it is what
- * gets printed / saved as PDF for the manager.
+ * gets exported to Excel for the manager.
  */
 export function ManagerReport() {
   const vendors = useVendors();
@@ -27,11 +30,28 @@ export function ManagerReport() {
   const { t, dir, vendorName } = useI18n();
   const [preset, setPreset] = useState<RangePreset>("thisMonth");
   const [custom, setCustom] = useState(() => presetRange("thisMonth"));
+  const [exporting, setExporting] = useState(false);
+  const { notify, errorText } = useToast();
 
   const range = preset === "custom" ? custom : presetRange(preset);
   const valid = !!range.from && !!range.to && range.from <= range.to;
   const all = useMemo(() => cases.data.filter((c) => !hidden.has(c.id)), [cases.data, hidden]);
   const report = useMemo(() => (valid ? buildPeriodReport(all, range.from, range.to, vmap) : null), [all, range.from, range.to, vmap, valid]);
+
+  async function exportXlsx() {
+    if (!report) return;
+    setExporting(true);
+    try {
+      // Same layout as the report: grouped by vendor, with the Vendor column.
+      const rows = report.byVendor.flatMap((g) => g.cases);
+      const { buildXlsxBlob } = await import("@/lib/export/excel"); // exceljs is large — load on demand
+      downloadBlob(await buildXlsxBlob(rows, vmap, { includeVendor: true }), managerReportFileName(report.from, report.to));
+    } catch (e) {
+      notify(t("reports.exportFailed", { reason: errorText(e) }), "error");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (vendors.error || cases.error) return <ErrorState error={(vendors.error ?? cases.error)!} />;
   if (vendors.loading || cases.loading) return <LoadingBlock />;
@@ -69,11 +89,11 @@ export function ManagerReport() {
           </div>
         )}
         <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={() => window.print()} disabled={!report}>
-            <Printer className="h-4 w-4" />
-            {t("manager.print")}
+          <Button onClick={exportXlsx} disabled={!report || exporting || !report.cases.length}>
+            <Download className="h-4 w-4" />
+            {exporting ? t("reports.exporting") : t("reports.exportExcel")}
           </Button>
-          <p className="text-xs text-ink-3">{t("manager.printHint")}</p>
+          <p className="text-xs text-ink-3">{t("manager.excelHint")}</p>
         </div>
       </div>
 
@@ -130,7 +150,7 @@ export function ManagerReport() {
                     <table className="w-full border-collapse text-sm print:text-[11px]">
                       <thead>
                         <tr className="bg-neutral-100 text-xs">
-                          {["Case", "Task Bar", "Start Date", "End Date", t("col.days"), "Comments"].map((h) => (
+                          {["Case", FIELD_LABELS.taskBar, "Start Date", "End Date", t("col.days"), "Comments"].map((h) => (
                             <th key={h} className={`${cell} text-start font-semibold`}>
                               {h}
                             </th>

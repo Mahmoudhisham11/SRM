@@ -43,7 +43,7 @@ export type CaseField = (typeof CASE_FIELDS)[number];
 /** English labels = SRM_Issues_Log.xlsx headers. */
 export const FIELD_LABELS: Record<CaseField, string> = {
   case: "Case",
-  taskBar: "Task Bar",
+  taskBar: "Task By",
   startDate: "Start Date",
   endDate: "End Date",
   comments: "Comments",

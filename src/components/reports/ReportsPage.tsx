@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, Calendar, ChevronDown, CircleCheck, Clock, Download, Printer, Search, Store, Target, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Calendar, ChevronDown, CircleCheck, Clock, ClipboardList, Download, Search, Store, Target, X } from "lucide-react";
 import { DesktopHeader, TopBar } from "@/components/AppShell";
 import { useToast } from "@/components/providers/ToastProvider";
 import { Button, EmptyState, ErrorState, LoadingBlock, StatusPill } from "@/components/ui";
@@ -16,6 +16,7 @@ import { EMPTY_FILTERS, filterCases, resolutionDays, sortCases, summarize, type 
 import { downloadBlob, exportFileName } from "@/lib/export/exportRows";
 import { buildCsv } from "@/lib/export/csv";
 import type { MessageKey } from "@/lib/i18n/messages";
+import { FIELD_LABELS } from "@/lib/types";
 
 const PAGE = 200;
 
@@ -64,7 +65,7 @@ export function ReportsPage() {
 
   const managerLink = (
     <Link href="/reports/manager" className="inline-flex h-10 items-center gap-2 rounded-full bg-surface-pink px-4 text-sm font-semibold text-berry hover:bg-berry-tint">
-      <Printer className="h-4 w-4" aria-hidden />
+      <ClipboardList className="h-4 w-4" aria-hidden />
       {t("nav.manager")}
     </Link>
   );
@@ -283,7 +284,7 @@ function PillSelect({
 
 const COLUMNS: Array<{ key: SortKey; label: string | MessageKey; i18n?: boolean; className?: string }> = [
   { key: "case", label: "Case", className: "min-w-56" },
-  { key: "taskBar", label: "Task Bar", className: "min-w-40" },
+  { key: "taskBar", label: FIELD_LABELS.taskBar, className: "min-w-40" },
   { key: "startDate", label: "Start Date" },
   { key: "endDate", label: "End Date" },
   { key: "status", label: "col.status", i18n: true },

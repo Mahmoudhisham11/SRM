@@ -5,7 +5,7 @@ Built for back-filling a year of notebook entries quickly, then for day-to-day l
 
 **Stack:** Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · Motion (animations) · lucide icons · Firebase (Google sign-in, Firestore, Storage) · exceljs · Vitest.
 
-**Bilingual:** full Arabic (RTL, default) and English (LTR) UI, switched from the «EN | ع» toggle and remembered per device. The five field labels (Case, Task Bar, Start Date, End Date, Comments) stay in English in both languages to match the `SRM_Issues_Log.xlsx` headers. Arabic text addresses the user in the feminine form («قولي»، «اضغطي»); this can be switched to masculine in **Settings**.
+**Bilingual:** full Arabic (RTL, default) and English (LTR) UI, switched from the «EN | ع» toggle and remembered per device. The five field labels (Case, Task By, Start Date, End Date, Comments) stay in English in both languages to match the `SRM_Issues_Log.xlsx` headers. Arabic text addresses the user in the feminine form («قولي»، «اضغطي»); this can be switched to masculine in **Settings**.
 
 **Design:** "Rose & Berry" light theme plus an "Evening" dark theme (or Auto). Readex Pro for Arabic and Latin text, with Fraunces for English headings. Every screen is mobile-first: a bottom bar with a center mic on phones, a sidebar on desktop.
 
@@ -20,8 +20,8 @@ Built for back-filling a year of notebook entries quickly, then for day-to-day l
 | **Parsing** | Spoken dates (`15 مارس`, `15/3`, `خمستاشر تلاتة`, `النهارده`, `امبارح`, `اول امبارح`, `آخر فبراير`, English months, Arabic-Indic digits) and amounts (`801 ألف` → 801,000, `مليون وربع` → 1,250,000). A session-level **default year** applies to back-filled dates spoken without a year. |
 | **Review** | Each saved case shows as an editable card. Tap a field to fix it by keyboard, or tap its mic to re-dictate just that field. The original audio is kept so you can replay it. |
 | **Reports** | One table of all cases with search, sorting and filters (vendor, date range, status, keyword). Summary tiles, cases per month and per vendor, and average resolution time. |
-| **Manager report** | This week / this month / last month / custom range. Shows totals plus a table grouped by vendor. **Print / Save as PDF.** |
-| **Export** | **Excel** in the SRM_Issues_Log format (`Case | Task Bar | Start Date | End Date | Comments`, `DD-MMM-YYYY`, Arial 10, optional **Vendor** column), plus **CSV**. |
+| **Manager report** | This week / this month / last month / custom range. Shows totals plus a table grouped by vendor. **Export to Excel** (grouped by vendor, with a Vendor column). |
+| **Export** | **Excel** in the SRM_Issues_Log format (`Case | Task By | Start Date | End Date | Comments`, `DD-MMM-YYYY`, Arial 10, optional **Vendor** column), plus **CSV**. |
 | **Experience** | Greeting with her name, today's count, and a «دفتر 2025» notebook ring (one petal per month), day streak and next milestone. The mic's aura follows her voice level, the chip for a recognised command flashes, and on save a check draws itself with a sparkle burst while the case drops into the session list. Milestones get a petal burst. Swipe a history row to close it today or delete it (with Undo). The phone vibrates on save and on field changes. Everything respects "reduce motion". |
 | **Quality** | Per-user security rules, offline-tolerant (Firestore cache with queued writes), and loading, empty and error states. About 210 unit tests for the parsers, reports and export, plus 11 security-rules tests against the Firebase emulators. |
 
@@ -108,7 +108,7 @@ Voice and microphone only work over **HTTPS**, which Vercel provides, or on `loc
 
 ### Guided mode (default)
 
-The app asks for each field in turn: **Case → Task Bar → Start Date → End Date → Comments**. Speak, then say a command:
+The app asks for each field in turn: **Case → Task By → Start Date → End Date → Comments**. Speak, then say a command:
 
 | Say | Effect |
 |---|---|
@@ -120,7 +120,13 @@ The app asks for each field in turn: **Case → Task Bar → Start Date → End 
 
 The commands also show as tappable chips, and the one just heard flashes. Feminine forms («ارجعي»، «فوتي») and English («next», «skip», «back», «clear», «save») work too.
 
-Commands count only at the **end** of what you said («…الخامات التالي»), or at the start for navigation. That way «الشهر التالي» or «حفظ المستندات» inside a sentence stays as text.
+Commands count only at the **end** of what you said («…الخامات التالي»), or at the start for navigation nouns («التالي»، «رجوع»، «تخطي»). That way «حفظ المستندات» inside a sentence stays as text, and so do:
+
+- «التالي»/«السابق» right after a time word: «الشهر التالي»، «اليوم السابق».
+- Verbs at the start of a sentence: «ارجع للمورد…» is text (said at the end, «ارجعي» still goes back).
+- «بعده» is never a command.
+
+Several cases in one breath work too: «… حفظ كيس …» saves the first case and starts the next one. If a case can't be saved, the cases said after it are shown so you can say them again.
 
 ### Free mode
 
@@ -131,12 +137,14 @@ Say everything at once, then «حفظ»:
 | Field | Keywords |
 |---|---|
 | Case | كيس، الكيس، case. Text before any keyword also counts as the Case. |
-| Task Bar | تاسك، تاسك بار، task، مهمة |
+| Task By | تاسك، تاسك باي، تاسك بار، task، task by، مهمة |
 | Start Date | من، بداية، تاريخ البداية، بدأ، start. These only count when a date follows them, so «طلب من المورد» stays text. |
 | End Date | لحد، لغاية، إلى، حتى، نهاية، خلص، اتقفل، end |
 | Comments | ملاحظة، ملاحظات، كومنت، تعليق، comment |
 
-If something is missing, for example a Start Date, the parsed fields stay on screen with the problem highlighted, ready to fix.
+In free mode only «حفظ» and «امسح» are commands, so «التالي» and the like always stay in the text.
+
+If something is missing, for example a Start Date, the parsed fields stay on screen with the problem highlighted, ready to fix. You can fix it by voice: say just the missing part («من 15 مارس حفظ») and it fills that field without touching the others. Words said without a keyword go to Comments. Saying «كيس …» again starts the case over.
 
 ### Dates and numbers it understands
 
@@ -144,6 +152,7 @@ If something is missing, for example a Start Date, the parsed fields stay on scr
 - `خمستاشر تلاتة` (15/3) · `واحد وعشرين اتناشر` (21/12) · `خمسة عشر شهر تلاتة` · `15 شهر 3`
 - `النهارده` · `امبارح` · `اول امبارح` · `بكرة` · `أول مارس` · `آخر فبراير`
 - Year: `… 2024` · `… سنة 24` · `… الفين اربعة وعشرين`. Without a year, the **default year** selector applies.
+- Across New Year: «من 20 ديسمبر لحد 5 يناير» ends on 5 January of the **next** year, when no year is said for the End Date and the case lasts at most about 6 months. «من 20 مارس لحد 15 مارس» is still flagged as an error.
 - Amounts inside text: `801 ألف` → `801,000`, `مليون وربع` → `1,250,000`, `ربع مليون` → `250,000`, `ألف ونص` → `1,500`. Plain words like «واحد من الموردين» are left alone.
 - Note: in Egyptian speech «تلاتة عشرة» is read as **day 3, month 10**. Say «تلتاشر» for 13.
 
@@ -165,7 +174,13 @@ Speech recognition needs **Google Chrome** or **Microsoft Edge**, on desktop or 
 
 ### Offline
 
-Firestore keeps a local cache. Cases you save offline appear immediately and sync when the connection returns (tested). Audio uploads need a connection; if one fails, the case is still saved and you'll see a message.
+Firestore keeps a local cache. Cases you save offline appear immediately and sync when the connection returns (tested). Recordings made offline are kept on the device (IndexedDB) and upload automatically when the connection returns or on the next visit.
+
+Deleting a case can be undone for 6 seconds. If the app is closed or sent to the background during that time, the delete is committed right away.
+
+In demo mode, recordings are stored in IndexedDB, not localStorage, so they don't fill the browser's ~5 MB localStorage limit.
+
+The app is installable (PWA). The service worker is registered only in production builds, so `npm run dev` always serves fresh code.
 
 ---
 
@@ -173,7 +188,7 @@ Firestore keeps a local cache. Cases you save offline appear immediately and syn
 
 `Reports → Excel` exports the cases currently shown (with the current filters and sort):
 
-- Sheet **SRM Issues Log**, columns in this order: **Case | Task Bar | Start Date | End Date | Comments**, plus **Vendor** last when «عمود Vendor» is ticked. It's appended at the end so the original column positions don't change.
+- Sheet **SRM Issues Log**, columns in this order: **Case | Task By | Start Date | End Date | Comments**, plus **Vendor** last when «عمود Vendor» is ticked. It's appended at the end so the original column positions don't change.
 - Every cell is **Arial 10**. The header row is bold, frozen, and has an AutoFilter.
 - Dates are **real Excel dates** formatted `[$-409]dd-mmm-yyyy` (e.g. `15-Mar-2025`), so they sort and filter as dates. The `[$-409]` prefix keeps English month names even on Arabic Windows.
 

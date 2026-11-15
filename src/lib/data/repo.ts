@@ -10,6 +10,8 @@ export type Unsubscribe = () => void;
  */
 export interface DataRepo {
   readonly kind: "firestore" | "local";
+  /** Whose data this is (Firebase uid, or "demo"). Keys device-side queues. */
+  readonly ownerId: string;
   /** Whether original recordings can be stored (Storage set up). */
   readonly audioEnabled: boolean;
 

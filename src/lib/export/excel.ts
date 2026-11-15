@@ -5,7 +5,7 @@ import { headersFor, vendorLabel, type ExportOptions } from "./exportRows";
 
 /**
  * Builds an .xlsx matching SRM_Issues_Log.xlsx:
- *   Case | Task Bar | Start Date | End Date | Comments  (+ optional Vendor, last)
+ *   Case | Task By | Start Date | End Date | Comments  (+ optional Vendor, last)
  * - every cell Arial 10
  * - dates are real Excel dates displayed DD-MMM-YYYY (English month names
  *   regardless of the Windows locale, via the [$-409] locale prefix), so they
