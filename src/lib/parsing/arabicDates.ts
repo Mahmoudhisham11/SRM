@@ -27,6 +27,8 @@ export interface DateRead {
   iso: string;
   /** Index of the first token not consumed. */
   end: number;
+  /** True when no year was spoken and `ctx.defaultYear` was used. */
+  yearInferred?: boolean;
 }
 
 const MONTH_WORDS: Array<[number, string[]]> = [
@@ -125,9 +127,10 @@ function readYear(tokens: Token[], i: number): { year: number; end: number } | n
   return null;
 }
 
-function build(y: number, m: number, d: number, end: number): DateRead | null {
+function build(y: number, m: number, d: number, end: number, yearInferred = false): DateRead | null {
   const parts = { y, m, d };
-  return isValidParts(parts) ? { iso: toISO(parts), end } : null;
+  if (!isValidParts(parts)) return null;
+  return yearInferred ? { iso: toISO(parts), end, yearInferred } : { iso: toISO(parts), end };
 }
 
 const NUMERIC_DMY = /^(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2}|\d{4}))?$/;
@@ -165,7 +168,7 @@ export function readDate(tokens: Token[], start: number, ctx: DateContext): Date
       return build(y, m, d, i + 1);
     }
     const year = readYear(tokens, i + 1);
-    return build(year?.year ?? ctx.defaultYear, m, d, year?.end ?? i + 1);
+    return build(year?.year ?? ctx.defaultYear, m, d, year?.end ?? i + 1, !year);
   }
 
   // --- "أول مارس" / "آخر فبراير" -------------------------------------------
@@ -190,7 +193,7 @@ export function readDate(tokens: Token[], start: number, ctx: DateContext): Date
     const day = readInt(tokens, monthFirst.end, 1, 31);
     if (!day) return null;
     const year = readYear(tokens, day.end);
-    return build(year?.year ?? ctx.defaultYear, monthFirst.month, day.value, year?.end ?? day.end);
+    return build(year?.year ?? ctx.defaultYear, monthFirst.month, day.value, year?.end ?? day.end, !year);
   }
 
   // --- Day then month: "15 مارس", "خمستاشر تلاتة", "15 / 3" -----------------
@@ -199,13 +202,13 @@ export function readDate(tokens: Token[], start: number, ctx: DateContext): Date
   const month = readMonth(tokens, day.end);
   if (!month) return null;
   const year = readYear(tokens, month.end);
-  return build(year?.year ?? ctx.defaultYear, month.month, day.value, year?.end ?? month.end);
+  return build(year?.year ?? ctx.defaultYear, month.month, day.value, year?.end ?? month.end, !year);
 }
 
 function finishFirstLast(tokens: Token[], j: number, month: number, first: boolean, ctx: DateContext) {
   const year = readYear(tokens, j);
   const y = year?.year ?? ctx.defaultYear;
-  return build(y, month, first ? 1 : daysInMonth(y, month), year?.end ?? j);
+  return build(y, month, first ? 1 : daysInMonth(y, month), year?.end ?? j, !year);
 }
 
 /**
@@ -213,10 +216,45 @@ function finishFirstLast(tokens: Token[], j: number, month: number, first: boole
  * people add words around the date ("كان يوم 15 مارس تقريبا").
  */
 export function parseSpokenDate(text: string, ctx: DateContext): string | null {
+  return parseSpokenDateInfo(text, ctx)?.iso ?? null;
+}
+
+/** Like `parseSpokenDate`, but also says whether the year was inferred. */
+export function parseSpokenDateInfo(text: string, ctx: DateContext): { iso: string; yearInferred: boolean } | null {
   const tokens = tokenize(text);
   for (let i = 0; i < tokens.length; i++) {
     const r = readDate(tokens, i, ctx);
-    if (r) return r.iso;
+    if (r) return { iso: r.iso, yearInferred: !!r.yearInferred };
   }
   return null;
+}
+
+/** Longest case that may run across New Year when the End Date's year isn't said. */
+const MAX_ROLLOVER_DAYS = 183;
+
+/**
+ * A case that runs across New Year: «من 20 ديسمبر لحد 5 يناير». Both dates
+ * get the default year, so the End Date lands before the Start Date. When the
+ * End Date's year wasn't spoken, its month is earlier in the year than the
+ * Start Date's, and the case would then last at most ~6 months, move the End
+ * Date to the next year. Anything else (e.g. 20 March → 15 March) stays an
+ * error for the user to fix.
+ */
+export function rollEndDateForward(startIso: string | null, endIso: string | null, endYearInferred: boolean): string | null {
+  if (!startIso || !endIso || !endYearInferred || endIso >= startIso) return endIso;
+  const y = Number(endIso.slice(0, 4)) + 1;
+  const m = Number(endIso.slice(5, 7));
+  const d = Number(endIso.slice(8, 10));
+  if (m >= Number(startIso.slice(5, 7))) return endIso;
+  if (!isValidParts({ y, m, d })) return endIso; // 29 Feb → no such day next year
+  const rolled = toISO({ y, m, d });
+  const days = (Date.parse(`${rolled}T00:00:00Z`) - Date.parse(`${startIso}T00:00:00Z`)) / 86_400_000;
+  return rolled >= startIso && days <= MAX_ROLLOVER_DAYS ? rolled : endIso;
+}
+
+/** Parse a spoken End Date relative to the case's Start Date (handles New Year rollover). */
+export function parseSpokenEndDate(text: string, startIso: string | null, ctx: DateContext): string | null {
+  const r = parseSpokenDateInfo(text, ctx);
+  if (!r) return null;
+  return rollEndDateForward(startIso, r.iso, r.yearInferred);
 }

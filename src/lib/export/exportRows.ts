@@ -2,7 +2,7 @@ import { formatDMY } from "../dates";
 import type { Case, Vendor } from "../types";
 
 /** Column order = SRM_Issues_Log.xlsx. "Vendor" is the optional extra column (appended last). */
-export const LOG_HEADERS = ["Case", "Task Bar", "Start Date", "End Date", "Comments"] as const;
+export const LOG_HEADERS = ["Case", "Task By", "Start Date", "End Date", "Comments"] as const;
 export const VENDOR_HEADER = "Vendor";
 
 export interface ExportOptions {
@@ -30,6 +30,10 @@ export function textRows(cases: Case[], vendors: Map<string, Vendor>, opts: Expo
 
 export function exportFileName(ext: "xlsx" | "csv", today: string): string {
   return `SRM_Issues_Log_${formatDMY(today)}.${ext}`;
+}
+
+export function managerReportFileName(from: string, to: string): string {
+  return `SRM_Manager_Report_${formatDMY(from)}_to_${formatDMY(to)}.xlsx`;
 }
 
 export function downloadBlob(blob: Blob, name: string) {

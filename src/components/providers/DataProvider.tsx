@@ -5,6 +5,7 @@ import { getFirebase, isAudioStorageEnabled, isFirebaseConfigured } from "@/lib/
 import type { DataRepo } from "@/lib/data/repo";
 import { LocalRepo } from "@/lib/data/localRepo";
 import { FirestoreRepo } from "@/lib/data/firestoreRepo";
+import { flushPendingAudio } from "@/lib/data/audioUpload";
 
 export interface AppUser {
   uid: string;
@@ -84,6 +85,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const { signOut: fbSignOut } = await import("firebase/auth");
     await fbSignOut(getFirebase().auth);
   }, [demo]);
+
+  // Recordings saved while offline: upload them now and whenever the connection returns.
+  const repo = auth.status === "signedIn" ? auth.repo : null;
+  useEffect(() => {
+    if (!repo || repo.kind !== "firestore") return;
+    const flush = () => void flushPendingAudio(repo);
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [repo]);
 
   const value = useMemo(() => ({ auth, demo, signIn, signOut }), [auth, demo, signIn, signOut]);
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

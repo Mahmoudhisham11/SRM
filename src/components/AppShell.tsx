@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { ChartColumn, ChevronLeft, ChevronRight, LogOut, Mic, Printer, Search, Settings, Store, WifiOff } from "lucide-react";
+import { ChartColumn, ChevronLeft, ChevronRight, ClipboardList, LogOut, Mic, Search, Settings, Store, WifiOff } from "lucide-react";
 import { useData } from "./providers/DataProvider";
 import { useToast } from "./providers/ToastProvider";
 import { FlowerMark, LangToggle, Logo, Monogram, Sheet, Button } from "./ui";
@@ -137,7 +137,7 @@ export function DesktopHeader({ back, title, actions }: { back?: string; title?:
 const NAV: Array<{ href: string; labelKey: MessageKey; icon: typeof Store; match: (p: string) => boolean }> = [
   { href: "/", labelKey: "nav.vendors", icon: Store, match: (p) => p === "/" || p.startsWith("/vendor") },
   { href: "/reports", labelKey: "nav.reports", icon: ChartColumn, match: (p) => p === "/reports" },
-  { href: "/reports/manager", labelKey: "nav.manager", icon: Printer, match: (p) => p.startsWith("/reports/manager") },
+  { href: "/reports/manager", labelKey: "nav.manager", icon: ClipboardList, match: (p) => p.startsWith("/reports/manager") },
   { href: "/settings", labelKey: "nav.settings", icon: Settings, match: (p) => p.startsWith("/settings") },
 ];
 

@@ -39,6 +39,10 @@ export class FirestoreRepo implements DataRepo {
     readonly audioEnabled: boolean,
   ) {}
 
+  get ownerId() {
+    return this.uid;
+  }
+
   private vendorsCol() {
     return collection(this.db, ROOT, this.uid, "vendors");
   }

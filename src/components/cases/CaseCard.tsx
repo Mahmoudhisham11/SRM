@@ -9,6 +9,7 @@ import { ConfirmDialog, StatusIcon, StatusPill } from "@/components/ui";
 import { AudioPlayer } from "./AudioPlayer";
 import { daysBetween, formatDMY, todayISO } from "@/lib/dates";
 import { cleanText } from "@/lib/parsing/caseParser";
+import { parseSpokenDateInfo, rollEndDateForward } from "@/lib/parsing/arabicDates";
 import { useI18n } from "@/lib/i18n/useI18n";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { scheduleDelete, undoDelete } from "@/lib/data/pendingDeletes";
@@ -58,8 +59,13 @@ export function CaseCard({
 
   function applySpoken(field: CaseField, text: string) {
     if (field === "startDate" || field === "endDate") {
-      const iso = parseDate?.(text) ?? null;
+      let iso = parseDate?.(text) ?? null;
       if (!iso) return notify(`${t("voice.dateNotUnderstood")}: «${text}»`, "error");
+      // «5 يناير» on a case that started in December → January of the next year.
+      if (field === "endDate") {
+        const inferred = !!parseSpokenDateInfo(text, { defaultYear: Number(iso.slice(0, 4)) })?.yearInferred;
+        iso = rollEndDateForward(c.startDate, iso, inferred);
+      }
       save({ [field]: iso });
     } else save({ [field]: cleanText(text) });
   }

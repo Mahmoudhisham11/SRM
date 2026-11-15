@@ -17,7 +17,8 @@ describe("splitCommands", () => {
   it("spelling variants", () => {
     expect(splitCommands("التالى").trailing).toEqual(["next"]);
     expect(splitCommands("تخطى").trailing).toEqual(["skip"]);
-    expect(splitCommands("اللي بعده").trailing).toEqual(["next"]);
+    // «بعده» is ordinary speech («كلمت المورد بعده»), so it's no longer a command.
+    expect(splitCommands("اللي بعده").trailing).toEqual([]);
   });
   it("several trailing commands", () => {
     expect(splitCommands("مفيش ملاحظات التالي حفظ")).toEqual({ leading: [], body: "مفيش ملاحظات", trailing: ["next", "save"] });

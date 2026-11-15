@@ -100,7 +100,7 @@ describe("Excel export (SRM_Issues_Log format)", () => {
     const back = new ExcelJS.Workbook();
     await back.xlsx.load(buf as ArrayBuffer);
     const ws = back.getWorksheet(SHEET_NAME)!;
-    expect(ws.getRow(1).values).toEqual([undefined, "Case", "Task Bar", "Start Date", "End Date", "Comments"]);
+    expect(ws.getRow(1).values).toEqual([undefined, "Case", "Task By", "Start Date", "End Date", "Comments"]);
     expect(ws.rowCount).toBe(5);
     const r2 = ws.getRow(2);
     expect(r2.getCell(1).value).toBe("تأخير توريد");
@@ -127,7 +127,7 @@ describe("CSV export", () => {
   it("BOM, headers, DD-MMM-YYYY, quoting, formula neutralization", () => {
     const tricky = [mk("a", "2025-01-10", null, 'كيس "مهم", عاجل', "=1+1")];
     const csv = buildCsv(tricky, V, { includeVendor: true });
-    expect(csv.startsWith("﻿Case,Task Bar,Start Date,End Date,Comments,Vendor\r\n")).toBe(true);
+    expect(csv.startsWith("﻿Case,Task By,Start Date,End Date,Comments,Vendor\r\n")).toBe(true);
     expect(csv).toContain('"كيس ""مهم"", عاجل",t,10-Jan-2025,,"\'=1+1",المصرية للتغليف (10532)\r\n');
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Case, CaseInput, CasePatch, Vendor, VendorInput } from "../types";
+import { audioStore, LOCAL_AUDIO_PREFIX } from "./audioStore";
 import { buildCaseDoc, cleanVendorInput, patchWithStatus, sortCases, sortVendors, type DataRepo } from "./repo";
 
 const KEY = "srm-voice-log:demo:v1";
@@ -17,11 +18,14 @@ function newId(): string {
 /**
  * Demo-mode repository: everything lives in this browser's localStorage.
  * Used automatically when Firebase env vars are missing, so the app can be
- * tried (and tested) without a Firebase project. Audio is kept as a data URL.
+ * tried (and tested) without a Firebase project. Audio clips are kept in
+ * IndexedDB (localStorage is too small for them); the case stores a
+ * "local-audio:<id>" reference that the player resolves.
  */
 export class LocalRepo implements DataRepo {
   readonly kind = "local" as const;
   readonly audioEnabled = true;
+  readonly ownerId = "demo";
   private listeners = new Set<() => void>();
   private store: Store;
 
@@ -93,7 +97,11 @@ export class LocalRepo implements DataRepo {
 
   async deleteVendor(id: string) {
     delete this.store.vendors[id];
-    for (const c of Object.values(this.store.cases)) if (c.vendorId === id) delete this.store.cases[c.id];
+    for (const c of Object.values(this.store.cases)) {
+      if (c.vendorId !== id) continue;
+      delete this.store.cases[c.id];
+      void audioStore.delete("clips", c.id).catch(() => undefined);
+    }
     this.commit();
   }
 
@@ -116,15 +124,12 @@ export class LocalRepo implements DataRepo {
   async deleteCase(id: string) {
     delete this.store.cases[id];
     this.commit();
+    void audioStore.delete("clips", id).catch(() => undefined);
   }
 
   async uploadAudio(caseId: string, blob: Blob) {
-    const url = await new Promise<string>((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result as string);
-      r.onerror = () => reject(r.error);
-      r.readAsDataURL(blob);
-    });
+    await audioStore.put("clips", caseId, blob);
+    const url = `${LOCAL_AUDIO_PREFIX}${caseId}`;
     await this.updateCase(caseId, { audioUrl: url });
     return url;
   }
