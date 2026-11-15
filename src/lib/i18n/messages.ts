@@ -85,6 +85,7 @@ export const MESSAGES = {
   "vendor.err.name": { ar: g("اكتبي اسم المورد (عربي أو إنجليزي)", "اكتب اسم المورد (عربي أو إنجليزي)"), en: "Enter a vendor name (Arabic or English)" },
   "vendor.err.codeFormat": { ar: "الكود أرقام وحروف بس", en: "Code can only contain letters and numbers" },
   "vendor.err.codeTaken": { ar: "الكود {code} مستخدم لـ «{name}»", en: "Code {code} is already used by “{name}”" },
+  "vendor.delete.button": { ar: "حذف المورد", en: "Delete vendor" },
   "vendor.delete.title": { ar: g("تمسحي «{name}»؟", "تمسح «{name}»؟"), en: "Delete “{name}”?" },
   "vendor.delete.body": { ar: "هيتمسح معاه {total} حالة — {open} مفتوحة و{closed} مقفولة، وتسجيلاتهم الصوتية.", en: "This also deletes its {total} cases — {open} open, {closed} closed — and their recordings." },
   "vendor.delete.type": { ar: g("اكتبي الكود {code} للتأكيد", "اكتب الكود {code} للتأكيد"), en: "Type {code} to confirm" },

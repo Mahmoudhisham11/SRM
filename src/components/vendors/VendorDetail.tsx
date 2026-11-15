@@ -69,22 +69,33 @@ export function VendorDetail({ id, autoStart }: { id: string; autoStart: boolean
 
   const name = vendorName(vendor);
   const altName = vendorAltName(vendor);
-  const editButton = (
-    <IconButton label={t("common.edit")} onClick={() => setEditing(true)}>
-      <Pencil className="h-4 w-4" />
-    </IconButton>
+  const phoneActions = (
+    <div className="flex items-center gap-2">
+      <IconButton label={t("common.edit")} onClick={() => setEditing(true)}>
+        <Pencil className="h-4 w-4" />
+      </IconButton>
+      <IconButton label={t("vendor.delete.button")} onClick={() => setDeleting(true)} className="hover:!text-danger">
+        <Trash2 className="h-4 w-4" />
+      </IconButton>
+    </div>
   );
 
   return (
     <div>
-      <TopBar back="/" actions={editButton} />
+      <TopBar back="/" actions={phoneActions} />
       <DesktopHeader
         back="/"
         actions={
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-            <Pencil className="h-4 w-4" />
-            {t("common.edit")}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <Pencil className="h-4 w-4" />
+              {t("common.edit")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setDeleting(true)} className="hover:!text-danger">
+              <Trash2 className="h-4 w-4" />
+              {t("vendor.delete.button")}
+            </Button>
+          </div>
         }
       />
 
