@@ -2,7 +2,7 @@
 
 import type { Case, CaseInput, CasePatch, Vendor, VendorInput } from "../types";
 import { audioStore, LOCAL_AUDIO_PREFIX } from "./audioStore";
-import { buildCaseDoc, cleanVendorInput, patchWithStatus, sortCases, sortVendors, type DataRepo } from "./repo";
+import { buildCaseDoc, cleanVendorInput, normalizeVendor, planVendorImport, patchWithStatus, sortCases, sortVendors, type DataRepo } from "./repo";
 
 const KEY = "srm-voice-log:demo:v1";
 
@@ -42,7 +42,11 @@ export class LocalRepo implements DataRepo {
   private load(): Store {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) return JSON.parse(raw) as Store;
+      if (raw) {
+        const s = JSON.parse(raw) as Store;
+        for (const [id, v] of Object.entries(s.vendors)) s.vendors[id] = normalizeVendor(id, v);
+        return s;
+      }
     } catch {
       /* private mode / corrupted — start empty */
     }
@@ -93,6 +97,21 @@ export class LocalRepo implements DataRepo {
     if (!v) throw new Error("Vendor not found — المورد غير موجود");
     this.store.vendors[id] = { ...v, ...cleanVendorInput(input), updatedAt: Date.now() };
     this.commit();
+  }
+
+  async importVendors(rows: VendorInput[], existing: Vendor[]) {
+    const plan = planVendorImport(rows, existing);
+    const now = Date.now();
+    for (const v of plan.create) {
+      const id = newId();
+      this.store.vendors[id] = { id, ...v, createdAt: now, updatedAt: now };
+    }
+    for (const { id, input } of plan.update) {
+      const v = this.store.vendors[id];
+      if (v) this.store.vendors[id] = { ...v, ...input, updatedAt: now };
+    }
+    this.commit();
+    return { created: plan.create.length, updated: plan.update.length, unchanged: plan.unchanged };
   }
 
   async deleteVendor(id: string) {

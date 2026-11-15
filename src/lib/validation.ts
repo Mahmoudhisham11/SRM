@@ -24,6 +24,7 @@ export function validateCaseFields(c: {
 export interface VendorErrors {
   nameAr?: MessageKey;
   code?: MessageKey;
+  material?: MessageKey;
   /** For "code taken": the vendor that already has it. */
   codeOwnerId?: string;
 }
@@ -31,8 +32,10 @@ export interface VendorErrors {
 export function validateVendor(v: VendorInput, existingCodes: Map<string, string>, selfId?: string): VendorErrors {
   const errors: VendorErrors = {};
   if (!v.nameAr.trim() && !v.nameEn.trim()) errors.nameAr = "vendor.err.name";
+  if (!v.material.trim()) errors.material = "vendor.err.material";
   const code = v.code.trim();
-  if (code) {
+  if (!code) errors.code = "vendor.err.codeRequired";
+  else {
     if (!/^[A-Za-z0-9\-_/]+$/.test(code)) errors.code = "vendor.err.codeFormat";
     const owner = existingCodes.get(code);
     if (owner && owner !== selfId) {

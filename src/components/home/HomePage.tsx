@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { Info, Moon, Plus, Search, Sparkles, Sun, Target, X } from "lucide-react";
+import { FileSpreadsheet, Info, Moon, Plus, Search, Sparkles, Sun, Target, X } from "lucide-react";
 import { TopBar } from "@/components/AppShell";
 import { useData, useRepo } from "@/components/providers/DataProvider";
 import { Button, CountUp, EmptyState, ErrorState, Monogram, Skeleton, Slotted } from "@/components/ui";
-import { VendorFormSheet } from "@/components/vendors/VendorFormSheet";
+import { materialOptions, VendorFormSheet } from "@/components/vendors/VendorFormSheet";
+import { ImportVendorsSheet } from "@/components/vendors/ImportVendorsSheet";
 import { NotebookCard } from "./NotebookCard";
 import { useCases, useVendors } from "@/hooks/useCollections";
 import { useDefaultYear, useSessionCount } from "@/hooks/useVoicePrefs";
@@ -24,7 +25,7 @@ import type { Vendor } from "@/lib/types";
 
 export function vendorMatches(v: Vendor, q: string): boolean {
   if (!q) return true;
-  const hay = normalizeArabic(`${v.nameAr} ${v.nameEn} ${v.code}`);
+  const hay = normalizeArabic(`${v.nameAr} ${v.nameEn} ${v.code} ${v.material}`);
   return normalizeArabic(q).split(/\s+/).filter(Boolean).every((part) => hay.includes(part));
 }
 
@@ -33,8 +34,11 @@ function greetingKey(hour: number, hasName: boolean): MessageKey {
   return (hasName ? `greet.${part}` : `greet.noName.${part}`) as MessageKey;
 }
 
-const listVariants = { show: { transition: { staggerChildren: 0.05 } } };
-const itemVariants = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } };
+/** Vendor cards rendered at a time (the supplier list has hundreds). */
+const PAGE = 60;
+/** Only the first cards get the entrance animation; the rest appear at once. */
+const ANIMATED = 12;
+const itemVariants = { hidden: { opacity: 0, y: 14 }, show: (i: number) => ({ opacity: 1, y: 0, transition: { delay: Math.min(i, ANIMATED) * 0.04 } }) };
 
 export function HomePage() {
   const { t, todayLine, lang, vendorName } = useI18n();
@@ -49,6 +53,9 @@ export function HomePage() {
   const [sessionCount] = useSessionCount();
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(params.get("add") === "1");
+  const [importing, setImporting] = useState(false);
+  const [material, setMaterial] = useState("");
+  const [limit, setLimit] = useState(PAGE);
 
   useEffect(() => {
     if (params.get("add") === "1") router.replace("/");
@@ -66,7 +73,18 @@ export function HomePage() {
     }
     return m;
   }, [cases.data]);
-  const filtered = useMemo(() => vendors.data.filter((v) => vendorMatches(v, q)), [vendors.data, q]);
+  const materials = useMemo(() => materialOptions(vendors.data), [vendors.data]);
+  // Vendors you've logged cases for come first (most recent activity), then A→Z.
+  const lastActivity = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of cases.data) m.set(c.vendorId, Math.max(m.get(c.vendorId) ?? 0, c.updatedAt));
+    return m;
+  }, [cases.data]);
+  const filtered = useMemo(() => {
+    const list = vendors.data.filter((v) => (!material || v.material === material) && vendorMatches(v, q));
+    return list.sort((a, b) => (lastActivity.get(b.id) ?? 0) - (lastActivity.get(a.id) ?? 0));
+  }, [vendors.data, q, material, lastActivity]);
+  const shown = filtered.slice(0, limit);
   const suggestion = useMemo(
     () => (q.trim() && filtered.length === 0 ? closest(q, vendors.data, (v) => [v.nameAr, v.nameEn, v.code]) : null),
     [q, filtered.length, vendors.data],
@@ -111,7 +129,10 @@ export function HomePage() {
             <input
               type="search"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setLimit(PAGE);
+              }}
               placeholder={t("vendors.search")}
               aria-label={t("vendors.search")}
               className="h-13 w-full rounded-full border border-line-strong bg-surface ps-12 pe-12 text-base shadow-[var(--shadow-soft)] [&::-webkit-search-cancel-button]:hidden focus:outline-none focus:ring-4 focus:ring-berry-tint"
@@ -146,6 +167,10 @@ export function HomePage() {
                     <Plus className="h-4 w-4" />
                     {t("vendors.add")}
                   </Button>
+                  <Button variant="outline" onClick={() => setImporting(true)}>
+                    <FileSpreadsheet className="h-4 w-4" />
+                    {t("import.button")}
+                  </Button>
                   {demo && repo instanceof LocalRepo && (
                     <Button variant="soft" onClick={() => repo.replaceAll(buildSampleData().vendors, buildSampleData().cases)}>
                       {t("vendors.loadSample")}
@@ -156,10 +181,35 @@ export function HomePage() {
             />
           ) : (
             <section className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold">
-                  {t("vendors.title")} <span className="text-ink-3">· {vendors.data.length}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="me-auto text-lg font-bold">
+                  {t("vendors.title")}{" "}
+                  <span className="text-ink-3">
+                    · {filtered.length === vendors.data.length ? vendors.data.length : t("vendors.showing", { shown: filtered.length, total: vendors.data.length })}
+                  </span>
                 </h2>
+                {materials.length > 0 && (
+                  <select
+                    value={material}
+                    onChange={(e) => {
+                      setMaterial(e.target.value);
+                      setLimit(PAGE);
+                    }}
+                    aria-label={t("vendors.materialFilter")}
+                    className={`h-9 max-w-44 rounded-full border px-3 text-sm font-semibold ${material ? "border-transparent bg-surface-pink text-berry" : "border-line bg-surface text-ink-2"}`}
+                  >
+                    <option value="">{t("vendors.allMaterials")}</option>
+                    {materials.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <Button variant="outline" size="sm" onClick={() => setImporting(true)} aria-label={t("import.button")} title={t("import.button")}>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t("import.button")}</span>
+                </Button>
                 <Button variant="soft" size="sm" onClick={() => setAdding(true)}>
                   <Plus className="h-4 w-4" />
                   {t("vendors.add")}
@@ -189,13 +239,20 @@ export function HomePage() {
                   )}
                 </>
               ) : (
-                <motion.ul variants={listVariants} initial="hidden" animate="show" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {filtered.map((v) => (
-                    <motion.li key={v.id} variants={itemVariants} layout>
-                      <VendorCard v={v} counts={counts.get(v.id) ?? { open: 0, closed: 0 }} />
-                    </motion.li>
-                  ))}
-                </motion.ul>
+                <>
+                  <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {shown.map((v, i) => (
+                      <motion.li key={v.id} variants={itemVariants} custom={i} initial={i < ANIMATED ? "hidden" : false} animate="show">
+                        <VendorCard v={v} counts={counts.get(v.id) ?? { open: 0, closed: 0 }} />
+                      </motion.li>
+                    ))}
+                  </ul>
+                  {filtered.length > shown.length && (
+                    <Button variant="outline" className="self-center" onClick={() => setLimit((n) => n + PAGE)}>
+                      {t("vendors.showMore", { n: Math.min(PAGE, filtered.length - shown.length) })}
+                    </Button>
+                  )}
+                </>
               )}
             </section>
           )}
@@ -208,6 +265,7 @@ export function HomePage() {
         onClose={() => setAdding(false)}
         onCreated={(id) => router.push(`/vendor?id=${encodeURIComponent(id)}`)}
       />
+      <ImportVendorsSheet open={importing} vendors={vendors.data} onClose={() => setImporting(false)} />
     </div>
   );
 }
@@ -247,6 +305,7 @@ function VendorCard({ v, counts }: { v: Vendor; counts: { open: number; closed: 
           <div className="min-w-0 flex-1">
             <p className="truncate text-lg font-bold">{name}</p>
             {alt && <p className="truncate text-sm text-ink-3">{alt}</p>}
+            {v.material && <p className="mt-0.5 truncate text-xs font-semibold text-berry" dir="ltr" style={{ textAlign: "start" }}>{v.material}</p>}
           </div>
           {v.code && <span className="ltr-nums rounded-lg border border-line bg-surface-2 px-2 py-1 text-xs font-bold text-ink-2">{v.code}</span>}
         </div>

@@ -108,6 +108,11 @@ export function VendorDetail({ id, autoStart }: { id: string; autoStart: boolean
               <h1 className="font-display-en truncate text-2xl font-bold sm:text-3xl">{name}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-3">
                 {vendor.code && <span className="ltr-nums rounded-lg border border-line bg-surface-2 px-2 py-0.5 text-xs font-bold text-ink-2">{vendor.code}</span>}
+                {vendor.material && (
+                  <span dir="ltr" className="rounded-lg bg-surface-pink px-2 py-0.5 text-xs font-bold text-berry">
+                    {vendor.material}
+                  </span>
+                )}
                 {altName && <span>{altName}</span>}
                 {vendor.contact && (
                   <span className="flex items-center gap-1">
