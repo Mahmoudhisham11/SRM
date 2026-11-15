@@ -249,6 +249,9 @@ function BottomNav({ onMic }: { onMic: () => void }) {
 }
 
 /** Sheet to choose a vendor before logging (from the center mic / sidebar). */
+/** Rows shown in the picker; search narrows the rest. */
+const PICKER_LIMIT = 50;
+
 function VendorPicker({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, vendorName, vendorAltName } = useI18n();
   const router = useRouter();
@@ -256,7 +259,12 @@ function VendorPicker({ open, onClose }: { open: boolean; onClose: () => void })
   const [q, setQ] = useState("");
   const list = useMemo(() => {
     const nq = normalizeArabic(q.trim());
-    return vendors.data.filter((v) => !nq || normalizeArabic(`${v.nameAr} ${v.nameEn} ${v.code}`).includes(nq));
+    const parts = nq.split(/\s+/).filter(Boolean);
+    const all = vendors.data.filter((v) => {
+      const hay = normalizeArabic(`${v.nameAr} ${v.nameEn} ${v.code} ${v.material}`);
+      return parts.every((p) => hay.includes(p));
+    });
+    return all;
   }, [vendors.data, q]);
   return (
     <Sheet open={open} title={t("vendors.pick")} onClose={onClose}>
@@ -271,7 +279,7 @@ function VendorPicker({ open, onClose }: { open: boolean; onClose: () => void })
         />
       </label>
       <ul className="flex flex-col gap-2">
-        {list.map((v) => (
+        {list.slice(0, PICKER_LIMIT).map((v) => (
           <li key={v.id}>
             <button
               type="button"
@@ -285,12 +293,17 @@ function VendorPicker({ open, onClose }: { open: boolean; onClose: () => void })
               <Monogram name={vendorName(v)} className="h-10 w-10 text-base" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-semibold">{vendorName(v)}</span>
-                {vendorAltName(v) && <span className="block truncate text-xs text-ink-3">{vendorAltName(v)}</span>}
+                {(vendorAltName(v) || v.material) && (
+                  <span className="block truncate text-xs text-ink-3">{[v.material, vendorAltName(v)].filter(Boolean).join(" · ")}</span>
+                )}
               </span>
               {v.code && <span className="ltr-nums rounded-lg bg-surface-2 px-2 py-1 text-xs font-semibold text-ink-2">{v.code}</span>}
             </button>
           </li>
         ))}
+        {list.length > PICKER_LIMIT && (
+          <li className="py-2 text-center text-xs text-ink-3">{t("vendors.pickMore", { n: list.length - PICKER_LIMIT })}</li>
+        )}
         {!vendors.loading && vendors.data.length === 0 && (
           <li className="py-6 text-center text-sm text-ink-3">
             {t("vendors.empty.title")} —{" "}

@@ -2,15 +2,17 @@ export interface Vendor {
   id: string;
   nameAr: string;
   nameEn: string;
-  /** SAP-style vendor code, e.g. "10532". Optional for back-filled vendors. */
+  /** SAP vendor number, e.g. "10532". Required for new vendors. */
   code: string;
+  /** Material type the vendor supplies («Steel», «Service», …). Required for new vendors. */
+  material: string;
   contact: string;
   notes: string;
   createdAt: number;
   updatedAt: number;
 }
 
-export type VendorInput = Pick<Vendor, "nameAr" | "nameEn" | "code" | "contact" | "notes">;
+export type VendorInput = Pick<Vendor, "nameAr" | "nameEn" | "code" | "material" | "contact" | "notes">;
 
 export type CaseStatus = "open" | "closed";
 

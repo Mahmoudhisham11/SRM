@@ -15,7 +15,7 @@ import {
 } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes, type FirebaseStorage } from "firebase/storage";
 import type { Case, CaseInput, CasePatch, Vendor, VendorInput } from "../types";
-import { buildCaseDoc, cleanVendorInput, patchWithStatus, sortCases, sortVendors, type DataRepo } from "./repo";
+import { buildCaseDoc, cleanVendorInput, normalizeVendor, patchWithStatus, planVendorImport, sortCases, sortVendors, type DataRepo } from "./repo";
 
 /**
  * Layout (all per-user, enforced by firestore.rules):
@@ -56,7 +56,7 @@ export class FirestoreRepo implements DataRepo {
   watchVendors(onData: (v: Vendor[]) => void, onError: (e: Error) => void) {
     return onSnapshot(
       this.vendorsCol(),
-      (snap) => onData(sortVendors(snap.docs.map((d) => ({ ...(d.data() as Omit<Vendor, "id">), id: d.id })))),
+      (snap) => onData(sortVendors(snap.docs.map((d) => normalizeVendor(d.id, d.data() as Partial<Vendor>)))),
       onError,
     );
   }
@@ -79,6 +79,24 @@ export class FirestoreRepo implements DataRepo {
 
   updateVendor(id: string, input: VendorInput) {
     return updateDoc(doc(this.vendorsCol(), id), { ...cleanVendorInput(input), updatedAt: Date.now() });
+  }
+
+  async importVendors(rows: VendorInput[], existing: Vendor[]) {
+    const plan = planVendorImport(rows, existing);
+    const now = Date.now();
+    const writes: Array<(b: ReturnType<typeof writeBatch>) => void> = [
+      ...plan.create.map((v) => (b: ReturnType<typeof writeBatch>) => b.set(doc(this.vendorsCol()), { ...v, createdAt: now, updatedAt: now })),
+      ...plan.update.map(({ id, input }) => (b: ReturnType<typeof writeBatch>) => b.update(doc(this.vendorsCol(), id), { ...input, updatedAt: now })),
+    ];
+    // Batches are limited to 500 writes. Offline, they're queued and sync later.
+    const commits: Promise<void>[] = [];
+    for (let i = 0; i < writes.length; i += 450) {
+      const batch = writeBatch(this.db);
+      writes.slice(i, i + 450).forEach((w) => w(batch));
+      commits.push(batch.commit());
+    }
+    await Promise.all(commits);
+    return { created: plan.create.length, updated: plan.update.length, unchanged: plan.unchanged };
   }
 
   async deleteVendor(id: string) {

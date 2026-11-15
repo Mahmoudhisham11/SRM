@@ -7,7 +7,7 @@ import { formatDMY, parseDMY } from "../dates";
 import { statusFor, type Case, type Vendor } from "../types";
 
 const vendor = (id: string, nameAr: string, code: string): Vendor => ({
-  id, nameAr, nameEn: "", code, contact: "", notes: "", createdAt: 0, updatedAt: 0,
+  id, nameAr, nameEn: "", code, material: "", contact: "", notes: "", createdAt: 0, updatedAt: 0,
 });
 const V = new Map([
   ["a", vendor("a", "المصرية للتغليف", "10532")],

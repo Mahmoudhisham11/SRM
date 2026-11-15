@@ -4,17 +4,17 @@ import { statusFor, type Case, type Vendor } from "../types";
 /** Deterministic demo data spanning the last ~12 months. */
 export function buildSampleData(today = todayISO()): { vendors: Vendor[]; cases: Case[] } {
   const now = Date.now();
-  const vendorSeeds: Array<[string, string, string, string]> = [
-    ["المصرية للتغليف", "Egyptian Packaging Co.", "10532", "م. أحمد سمير — 01001234567"],
-    ["النيل للكيماويات", "Nile Chemicals", "10877", "أ. منى عادل — 01112223344"],
-    ["الدلتا للنقل", "Delta Logistics", "11204", ""],
-    ["العربية للبلاستيك", "Arab Plastics", "10415", "مكتب المبيعات — 0223456789"],
-    ["مصر للمعادن", "Misr Metals", "12090", ""],
-    ["الشرق للأحبار", "El Sharq Inks", "10961", ""],
+  const vendorSeeds: Array<[string, string, string, string, string]> = [
+    ["المصرية للتغليف", "Egyptian Packaging Co.", "10532", "General Supplier", "م. أحمد سمير — 01001234567"],
+    ["النيل للكيماويات", "Nile Chemicals", "10877", "Chemicals", "أ. منى عادل — 01112223344"],
+    ["الدلتا للنقل", "Delta Logistics", "11204", "Service", ""],
+    ["العربية للبلاستيك", "Arab Plastics", "10415", "General Supplier", "مكتب المبيعات — 0223456789"],
+    ["مصر للمعادن", "Misr Metals", "12090", "Steel", ""],
+    ["الشرق للأحبار", "El Sharq Inks", "10961", "Chemicals", ""],
   ];
-  const vendors: Vendor[] = vendorSeeds.map(([nameAr, nameEn, code, contact], i) => ({
+  const vendors: Vendor[] = vendorSeeds.map(([nameAr, nameEn, code, material, contact], i) => ({
     id: `demo-v${i + 1}`,
-    nameAr, nameEn, code, contact,
+    nameAr, nameEn, code, material, contact,
     notes: i === 0 ? "مورد استراتيجي — كرتون مضلع" : "",
     createdAt: now - (400 - i) * 86_400_000,
     updatedAt: now - (400 - i) * 86_400_000,

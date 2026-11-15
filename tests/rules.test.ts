@@ -87,6 +87,12 @@ describe("vendor validation", () => {
     await assertFails(setDoc(doc(alice(), "srmVoiceLog/alice/vendors/v1"), { ...vendor, nameAr: "", nameEn: "" }));
     await assertSucceeds(setDoc(doc(alice(), "srmVoiceLog/alice/vendors/v1"), { ...vendor, nameAr: "", nameEn: "Nile" }));
   });
+  it("accepts a material, and older vendors without one", async () => {
+    await assertSucceeds(setDoc(doc(alice(), "srmVoiceLog/alice/vendors/v1"), { ...vendor, material: "Steel" }));
+    await assertSucceeds(setDoc(doc(alice(), "srmVoiceLog/alice/vendors/v2"), vendor));
+    await assertFails(setDoc(doc(alice(), "srmVoiceLog/alice/vendors/v3"), { ...vendor, material: 42 }));
+    await assertFails(setDoc(doc(alice(), "srmVoiceLog/alice/vendors/v4"), { ...vendor, rating: 5 }));
+  });
 });
 
 describe("storage", () => {

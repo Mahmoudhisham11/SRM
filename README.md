@@ -15,7 +15,7 @@ Built for back-filling a year of notebook entries quickly, then for day-to-day l
 
 | Area | What you get |
 |---|---|
-| **Vendors** | Add, edit and delete vendors (Arabic/English name, code such as `10532`, contact, notes). Instant search by name or code; it ignores spelling variants (أ/ا، ة/ه، ى/ي) and accepts Arabic-Indic digits. The vendor page lists all of that vendor's cases. |
+| **Vendors** | Add, edit and delete vendors. **Vendor number, name and Material are required**; contact and notes are optional. **Import a whole supplier list from Excel** (Vendor Number · Vendor Name · Material Type). Search by name, number or material, filter by material; it ignores spelling variants (أ/ا، ة/ه، ى/ي) and accepts Arabic-Indic digits. Deleting a vendor deletes all of its cases. The vendor page lists all of that vendor's cases. |
 | **Voice logging** | Open a vendor, press the big mic and dictate. **Guided mode** asks one field at a time. **Free mode** takes the whole case in one sentence. Hands-free: «حفظ» saves and starts the next case right away. |
 | **Parsing** | Spoken dates (`15 مارس`, `15/3`, `خمستاشر تلاتة`, `النهارده`, `امبارح`, `اول امبارح`, `آخر فبراير`, English months, Arabic-Indic digits) and amounts (`801 ألف` → 801,000, `مليون وربع` → 1,250,000). A session-level **default year** applies to back-filled dates spoken without a year. |
 | **Review** | Each saved case shows as an editable card. Tap a field to fix it by keyboard, or tap its mic to re-dictate just that field. The original audio is kept so you can replay it. |
@@ -76,6 +76,15 @@ Open http://localhost:3000 in **Chrome or Edge**. Without Firebase settings the 
    ```
 
 8. Restart `npm run dev` and sign in with Google.
+
+### Importing your supplier list
+
+On the Vendors page, tap **Import from Excel** and choose an `.xlsx` with the columns **Vendor Number**, **Vendor Name** and **Material Type** (Arabic headers such as «رقم المورد»، «اسم المورد»، «الخامة» work too, in any order). The app shows how many vendors are new, will be updated, or are already there before writing anything.
+
+- Vendors are matched by number, so importing the same sheet again never duplicates anyone.
+- For a vendor that already exists, only its name and material are updated. Its contact, notes and cases are kept.
+- Extra spaces are removed, and spellings of the same material are merged («Arab» / «Arab »).
+- Rows missing a number, a name or a material are listed and skipped.
 
 ### Data layout and rules
 

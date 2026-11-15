@@ -23,11 +23,13 @@ service cloud.firestore {
         return v is string && v.size() <= max;
       }
       function validVendor(d) {
-        return d.keys().hasOnly(['nameAr', 'nameEn', 'code', 'contact', 'notes', 'createdAt', 'updatedAt'])
+        return d.keys().hasOnly(['nameAr', 'nameEn', 'code', 'material', 'contact', 'notes', 'createdAt', 'updatedAt'])
           && d.keys().hasAll(['nameAr', 'nameEn', 'code', 'createdAt', 'updatedAt'])
           && isText(d.nameAr, 200) && isText(d.nameEn, 200)
           && (d.nameAr.size() > 0 || d.nameEn.size() > 0)
           && isText(d.code, 50)
+          // Material type (added later: optional so older vendor documents stay valid).
+          && isText(d.get('material', ''), 200)
           && isText(d.get('contact', ''), 500) && isText(d.get('notes', ''), 5000)
           && d.createdAt is number && d.updatedAt is number;
       }
