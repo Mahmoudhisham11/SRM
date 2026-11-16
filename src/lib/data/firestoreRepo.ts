@@ -18,39 +18,53 @@ import type { Case, CaseInput, CasePatch, Vendor, VendorInput } from "../types";
 import { buildCaseDoc, cleanVendorInput, normalizeVendor, patchWithStatus, planVendorImport, sortCases, sortVendors, type DataRepo } from "./repo";
 
 /**
- * Layout (all per-user, enforced by firestore.rules):
- *   srmVoiceLog/{uid}/vendors/{vendorId}
- *   srmVoiceLog/{uid}/cases/{caseId}  (flat, with vendorId — reports read all)
- *   storage: srmVoiceLog/{uid}/audio/{caseId}
+ * Layout (one shared space for every approved user, enforced by firestore.rules):
+ *   srmVoiceLog/shared/vendors/{vendorId}
+ *   srmVoiceLog/shared/cases/{caseId}   (flat, with vendorId — reports read all)
+ *   srmVoiceLog/shared/users/{uid}      (accounts and approval, see lib/auth/users.ts)
+ *   storage: srmVoiceLog/shared/audio/{caseId}
+ *
+ * Older versions kept each person's data under srmVoiceLog/{uid}; the
+ * one-time setup copies it here (lib/auth/setup.ts).
  *
  * A dedicated root collection, so the app can share a Firebase project with
  * other apps (e.g. their own "users" collection) without colliding.
  */
 /** Root collection (Firestore) and folder (Storage) for this app. Keep in sync with the rules. */
 export const ROOT = "srmVoiceLog";
+/** The shared space under ROOT. */
+export const SHARED = "shared";
+
+/** Who is writing (stamped on the cases they log). */
+export interface Actor {
+  uid: string;
+  name: string;
+}
 
 export class FirestoreRepo implements DataRepo {
   readonly kind = "firestore" as const;
 
+  readonly ownerId = SHARED;
+
   constructor(
     private db: Firestore,
     private storage: FirebaseStorage,
-    private uid: string,
+    private actor: Actor,
     readonly audioEnabled: boolean,
   ) {}
 
-  get ownerId() {
-    return this.uid;
+  get actorName() {
+    return this.actor.name;
   }
 
   private vendorsCol() {
-    return collection(this.db, ROOT, this.uid, "vendors");
+    return collection(this.db, ROOT, SHARED, "vendors");
   }
   private casesCol() {
-    return collection(this.db, ROOT, this.uid, "cases");
+    return collection(this.db, ROOT, SHARED, "cases");
   }
   private audioRef(caseId: string) {
-    return ref(this.storage, `${ROOT}/${this.uid}/audio/${caseId}`);
+    return ref(this.storage, `${ROOT}/${SHARED}/audio/${caseId}`);
   }
 
   watchVendors(onData: (v: Vendor[]) => void, onError: (e: Error) => void) {
@@ -118,7 +132,7 @@ export class FirestoreRepo implements DataRepo {
   }
 
   createCase(id: string, input: CaseInput) {
-    const { id: _omit, ...data } = buildCaseDoc(id, input, Date.now());
+    const { id: _omit, ...data } = buildCaseDoc(id, { ...input, createdBy: this.actor.uid, createdByName: this.actor.name }, Date.now());
     void _omit;
     return setDoc(doc(this.casesCol(), id), data);
   }

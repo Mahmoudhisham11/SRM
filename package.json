@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:rules": "npx -y firebase-tools@15 emulators:exec --only firestore,storage --project demo-srm-voice-log \"vitest run -c vitest.rules.config.mts\"",
+    "test:rules": "npx -y firebase-tools@15 emulators:exec --only auth,firestore,storage --project demo-srm-voice-log \"vitest run -c vitest.rules.config.mts\"",
     "emulators": "npx -y firebase-tools@15 emulators:start --only auth,firestore,storage --project demo-srm-voice-log"
   },
   "dependencies": {

@@ -56,6 +56,7 @@ export function buildCaseDoc(id: string, input: CaseInput, now: number): Case {
     status: statusFor(input.endDate),
     audioUrl: null,
     transcript: input.transcript,
+    ...(input.createdBy ? { createdBy: input.createdBy, createdByName: input.createdByName ?? "" } : {}),
     createdAt: now,
     updatedAt: now,
   };

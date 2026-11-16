@@ -31,11 +31,15 @@ export interface Case {
   audioUrl: string | null;
   /** What the speech engine heard, kept for auditing the parse. */
   transcript: string;
+  /** Who logged it (uid and name at the time). Missing on cases from before shared accounts. */
+  createdBy?: string;
+  createdByName?: string;
   createdAt: number;
   updatedAt: number;
 }
 
-export type CaseInput = Pick<Case, "vendorId" | "case" | "taskBar" | "startDate" | "endDate" | "comments" | "transcript">;
+export type CaseInput = Pick<Case, "vendorId" | "case" | "taskBar" | "startDate" | "endDate" | "comments" | "transcript"> &
+  Partial<Pick<Case, "createdBy" | "createdByName">>;
 export type CasePatch = Partial<Pick<Case, "case" | "taskBar" | "startDate" | "endDate" | "comments" | "audioUrl" | "transcript">>;
 
 /** Editable case fields, in dictation order (matches the Excel columns). */
