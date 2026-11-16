@@ -70,6 +70,11 @@ describe("shared data", () => {
     void _m;
     await assertSucceeds(setDoc(doc(as("ann"), `${S}/vendors/v2`), older)); // vendors from before Material
   });
+  it("shared settings: anyone signed in, nobody signed out", async () => {
+    await assertSucceeds(setDoc(doc(as("ann"), `${S}/settings/duesAnalysis`), { fixedVendors: ["1"] }));
+    await assertSucceeds(getDoc(doc(as("bob"), `${S}/settings/duesAnalysis`)));
+    await assertFails(getDoc(doc(anon(), `${S}/settings/duesAnalysis`)));
+  });
   it("nothing else in the app's folder is writable", async () => {
     await assertFails(setDoc(doc(as("ann"), `${S}/users/ann`), { name: "Ann" }));
     await assertFails(setDoc(doc(as("ann"), `${S}/meta/x`), { a: 1 }));
