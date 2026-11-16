@@ -18,14 +18,12 @@ import type { Case, CaseInput, CasePatch, Vendor, VendorInput } from "../types";
 import { buildCaseDoc, cleanVendorInput, normalizeVendor, patchWithStatus, planVendorImport, sortCases, sortVendors, type DataRepo } from "./repo";
 
 /**
- * Layout (one shared space for every approved user, enforced by firestore.rules):
+ * Layout (one shared space for everyone who signs in, see firestore.rules):
  *   srmVoiceLog/shared/vendors/{vendorId}
  *   srmVoiceLog/shared/cases/{caseId}   (flat, with vendorId — reports read all)
- *   srmVoiceLog/shared/users/{uid}      (accounts and approval, see lib/auth/users.ts)
  *   storage: srmVoiceLog/shared/audio/{caseId}
  *
- * Older versions kept each person's data under srmVoiceLog/{uid}; the
- * one-time setup copies it here (lib/auth/setup.ts).
+ * Older versions kept each person's data under srmVoiceLog/{uid}.
  *
  * A dedicated root collection, so the app can share a Firebase project with
  * other apps (e.g. their own "users" collection) without colliding.

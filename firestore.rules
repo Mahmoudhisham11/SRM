@@ -2,13 +2,10 @@ rules_version = '2';
 
 // SRM Voice Log — Firestore rules.
 //
-// One shared space (srmVoiceLog/shared/…) for everyone the admin approved:
-//   vendors, cases   read/write for approved accounts (writes are validated)
-//   users/{uid}      accounts: new ones start "pending"; only admins approve,
-//                    turn off, promote or remove accounts
-//   meta/setup       written once, when the owner becomes the first admin
+// One shared space (srmVoiceLog/shared/…): everyone who signs in (name +
+// password) reads and writes the same vendors and cases. Writes are validated.
 // Older versions kept each person's data under srmVoiceLog/{uid}/…; that copy
-// is now read-only for its owner (setup copies it into the shared space).
+// is read-only for its owner.
 //
 // Sharing a Firebase project with another app? Do NOT replace that app's rules:
 // copy everything between the two "SRM Voice Log" markers below into your
@@ -56,99 +53,24 @@ service cloud.firestore {
         && d.createdAt is number && d.updatedAt is number;
     }
 
+    // One shared space: every signed-in account reads and writes the same data.
     match /srmVoiceLog/shared {
       function signedIn() {
         return request.auth != null;
       }
-      function userPath(uid) {
-        return /databases/$(database)/documents/srmVoiceLog/shared/users/$(uid);
-      }
-      function setupPath() {
-        return /databases/$(database)/documents/srmVoiceLog/shared/meta/setup;
-      }
-      function approved() {
-        return signedIn() && exists(userPath(request.auth.uid))
-          && get(userPath(request.auth.uid)).data.status == 'approved';
-      }
-      function isAdmin() {
-        return approved() && get(userPath(request.auth.uid)).data.role == 'admin';
-      }
-      function tokenEmail() {
-        return request.auth.token.email != null ? request.auth.token.email.lower() : '';
-      }
-      // Proof that this account used the app before accounts existed: it owns a
-      // vendor or a case in its old folder (which nobody can write to any more).
-      function ownsLegacyData(d) {
-        return (d.get('legacyVendor', '') != ''
-                 && exists(/databases/$(database)/documents/srmVoiceLog/$(request.auth.uid)/vendors/$(d.legacyVendor)))
-          || (d.get('legacyCase', '') != ''
-                 && exists(/databases/$(database)/documents/srmVoiceLog/$(request.auth.uid)/cases/$(d.legacyCase)));
-      }
-      function validProfile(d) {
-        return d.keys().hasOnly(['name', 'email', 'role', 'status', 'createdAt', 'updatedAt'])
-          && d.keys().hasAll(['name', 'email', 'role', 'status', 'createdAt', 'updatedAt'])
-          && srmIsText(d.name, 120) && d.name.size() > 0
-          && srmIsText(d.email, 200)
-          && d.role in ['admin', 'member']
-          && d.status in ['pending', 'approved', 'disabled']
-          && d.createdAt is number && d.updatedAt is number;
-      }
 
       match /vendors/{vendorId} {
-        allow read, delete: if approved();
-        allow create, update: if approved() && srmValidVendor(request.resource.data);
+        allow read, delete: if signedIn();
+        allow create, update: if signedIn() && srmValidVendor(request.resource.data);
       }
 
       match /cases/{caseId} {
-        allow read, delete: if approved();
+        allow read, delete: if signedIn();
         // You can only stamp a case with your own uid; the stamp never changes afterwards.
-        allow create: if approved() && srmValidCase(request.resource.data)
+        allow create: if signedIn() && srmValidCase(request.resource.data)
           && request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid;
-        allow update: if approved() && srmValidCase(request.resource.data)
+        allow update: if signedIn() && srmValidCase(request.resource.data)
           && request.resource.data.get('createdBy', null) == resource.data.get('createdBy', null);
-      }
-
-      match /users/{uid} {
-        allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
-        allow list: if isAdmin();
-
-        allow create: if signedIn() && request.auth.uid == uid
-          && validProfile(request.resource.data)
-          && request.resource.data.email == tokenEmail()
-          && (
-            // Sign-up: always a pending member.
-            (request.resource.data.role == 'member' && request.resource.data.status == 'pending')
-            // One-time setup: the first admin, created together with meta/setup.
-            || (request.resource.data.role == 'admin' && request.resource.data.status == 'approved'
-                && !exists(setupPath()) && existsAfter(setupPath())
-                && ownsLegacyData(getAfter(setupPath()).data))
-          );
-
-        allow update: if validProfile(request.resource.data)
-          && request.resource.data.email == resource.data.email
-          && request.resource.data.createdAt == resource.data.createdAt
-          && (
-            // Admins approve / turn off / promote others (never themselves, so there's always an admin).
-            (isAdmin() && request.auth.uid != uid
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'role', 'updatedAt']))
-            // Anyone can change their own name.
-            || (signedIn() && request.auth.uid == uid
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt']))
-          );
-
-        allow delete: if isAdmin() && request.auth.uid != uid;
-      }
-
-      match /meta/setup {
-        // The sign-in screen checks this to offer (or hide) the one-time setup.
-        allow get: if true;
-        allow create: if signedIn()
-          && request.resource.data.keys().hasOnly(['done', 'at', 'legacyVendor', 'legacyCase'])
-          && request.resource.data.done == true && request.resource.data.at is number
-          && ownsLegacyData(request.resource.data)
-          && getAfter(userPath(request.auth.uid)).data.role == 'admin'
-          && getAfter(userPath(request.auth.uid)).data.status == 'approved';
-        allow update, delete: if false;
       }
     }
 

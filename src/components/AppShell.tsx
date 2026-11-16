@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { ChartColumn, ChevronLeft, ChevronRight, ClipboardList, HandCoins, LogOut, Mic, Search, Settings, Store, Users, WifiOff } from "lucide-react";
-import { useData, useProfile } from "./providers/DataProvider";
-import { AuthScreen, DisabledScreen, PendingScreen } from "./auth/AuthScreens";
+import { ChartColumn, ChevronLeft, ChevronRight, ClipboardList, HandCoins, LogOut, Mic, Search, Settings, Store, WifiOff } from "lucide-react";
+import { useData } from "./providers/DataProvider";
+import { AuthScreen } from "./auth/AuthScreens";
 import { FlowerMark, LangToggle, Logo, Monogram, Sheet } from "./ui";
 import { useI18n } from "@/lib/i18n/useI18n";
 import { useGreetingName, useOnline, pressMic } from "@/hooks/useAppChrome";
@@ -18,8 +18,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { auth } = useData();
   if (auth.status === "loading") return <Splash />;
   if (auth.status === "signedOut") return <AuthScreen />;
-  if (auth.status === "pending") return <PendingScreen />;
-  if (auth.status === "disabled") return <DisabledScreen />;
   return <SignedInShell>{children}</SignedInShell>;
 }
 
@@ -136,12 +134,11 @@ export function DesktopHeader({ back, title, actions }: { back?: string; title?:
   );
 }
 
-const NAV: Array<{ href: string; labelKey: MessageKey; icon: typeof Store; match: (p: string) => boolean; admin?: boolean }> = [
+const NAV: Array<{ href: string; labelKey: MessageKey; icon: typeof Store; match: (p: string) => boolean }> = [
   { href: "/", labelKey: "nav.vendors", icon: Store, match: (p) => p === "/" || p.startsWith("/vendor") },
   { href: "/dues", labelKey: "nav.dues", icon: HandCoins, match: (p) => p.startsWith("/dues") },
   { href: "/reports", labelKey: "nav.reports", icon: ChartColumn, match: (p) => p === "/reports" },
   { href: "/reports/manager", labelKey: "nav.manager", icon: ClipboardList, match: (p) => p.startsWith("/reports/manager") },
-  { href: "/users", labelKey: "nav.users", icon: Users, match: (p) => p.startsWith("/users"), admin: true },
   { href: "/settings", labelKey: "nav.settings", icon: Settings, match: (p) => p.startsWith("/settings") },
 ];
 
@@ -149,10 +146,8 @@ function Sidebar({ onLog }: { onLog: () => void }) {
   const pathname = usePathname();
   const { t } = useI18n();
   const { auth, demo, signOut } = useData();
-  const profile = useProfile();
   const name = useGreetingName();
   const user = auth.status === "signedIn" ? auth.user : null;
-  const isAdmin = profile?.role === "admin" && !demo;
   return (
     <aside className="fixed inset-y-0 start-0 z-30 hidden w-72 flex-col border-e border-line bg-surface/80 px-5 py-7 backdrop-blur lg:flex print:hidden">
       <Link href="/" className="px-3">
@@ -170,11 +165,9 @@ function Sidebar({ onLog }: { onLog: () => void }) {
           <Mic className="h-5 w-5" aria-hidden />
           {t("nav.log")}
         </button>
-        {NAV.slice(1)
-          .filter((n) => !n.admin || isAdmin)
-          .map((n) => (
-            <NavItem key={n.href} href={n.href} icon={n.icon} active={n.match(pathname)} label={t(n.labelKey)} />
-          ))}
+        {NAV.slice(1).map((n) => (
+          <NavItem key={n.href} href={n.href} icon={n.icon} active={n.match(pathname)} label={t(n.labelKey)} />
+        ))}
       </nav>
       <div className="mt-auto flex flex-col gap-4">
         <div className="self-start">
@@ -185,7 +178,7 @@ function Sidebar({ onLog }: { onLog: () => void }) {
             <Monogram name={name || "S"} className="h-10 w-10 rounded-full text-base" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{name || "SRM"}</p>
-              <p className="truncate text-xs text-ink-3">{demo ? t("demo.banner").split("—")[0] : user.email}</p>
+              <p className="truncate text-xs text-ink-3">{demo ? t("demo.banner").split("—")[0] : user.name}</p>
             </div>
             {!demo && (
               <button type="button" onClick={() => signOut()} aria-label={t("settings.signOut")} className="rounded-full p-2 text-ink-3 hover:text-berry">
