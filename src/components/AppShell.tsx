@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { ChartColumn, ChevronLeft, ChevronRight, ClipboardList, LogOut, Mic, Search, Settings, Store, WifiOff } from "lucide-react";
-import { useData } from "./providers/DataProvider";
-import { useToast } from "./providers/ToastProvider";
-import { FlowerMark, LangToggle, Logo, Monogram, Sheet, Button } from "./ui";
+import { ChartColumn, ChevronLeft, ChevronRight, ClipboardList, HandCoins, LogOut, Mic, Search, Settings, Store, Users, WifiOff } from "lucide-react";
+import { useData, useProfile } from "./providers/DataProvider";
+import { AuthScreen, DisabledScreen, PendingScreen } from "./auth/AuthScreens";
+import { FlowerMark, LangToggle, Logo, Monogram, Sheet } from "./ui";
 import { useI18n } from "@/lib/i18n/useI18n";
 import { useGreetingName, useOnline, pressMic } from "@/hooks/useAppChrome";
 import { useVendors } from "@/hooks/useCollections";
@@ -17,7 +17,9 @@ import type { MessageKey } from "@/lib/i18n/messages";
 export function AppShell({ children }: { children: ReactNode }) {
   const { auth } = useData();
   if (auth.status === "loading") return <Splash />;
-  if (auth.status === "signedOut") return <SignIn />;
+  if (auth.status === "signedOut") return <AuthScreen />;
+  if (auth.status === "pending") return <PendingScreen />;
+  if (auth.status === "disabled") return <DisabledScreen />;
   return <SignedInShell>{children}</SignedInShell>;
 }
 
@@ -134,10 +136,12 @@ export function DesktopHeader({ back, title, actions }: { back?: string; title?:
   );
 }
 
-const NAV: Array<{ href: string; labelKey: MessageKey; icon: typeof Store; match: (p: string) => boolean }> = [
+const NAV: Array<{ href: string; labelKey: MessageKey; icon: typeof Store; match: (p: string) => boolean; admin?: boolean }> = [
   { href: "/", labelKey: "nav.vendors", icon: Store, match: (p) => p === "/" || p.startsWith("/vendor") },
+  { href: "/dues", labelKey: "nav.dues", icon: HandCoins, match: (p) => p.startsWith("/dues") },
   { href: "/reports", labelKey: "nav.reports", icon: ChartColumn, match: (p) => p === "/reports" },
   { href: "/reports/manager", labelKey: "nav.manager", icon: ClipboardList, match: (p) => p.startsWith("/reports/manager") },
+  { href: "/users", labelKey: "nav.users", icon: Users, match: (p) => p.startsWith("/users"), admin: true },
   { href: "/settings", labelKey: "nav.settings", icon: Settings, match: (p) => p.startsWith("/settings") },
 ];
 
@@ -145,8 +149,10 @@ function Sidebar({ onLog }: { onLog: () => void }) {
   const pathname = usePathname();
   const { t } = useI18n();
   const { auth, demo, signOut } = useData();
+  const profile = useProfile();
   const name = useGreetingName();
   const user = auth.status === "signedIn" ? auth.user : null;
+  const isAdmin = profile?.role === "admin" && !demo;
   return (
     <aside className="fixed inset-y-0 start-0 z-30 hidden w-72 flex-col border-e border-line bg-surface/80 px-5 py-7 backdrop-blur lg:flex print:hidden">
       <Link href="/" className="px-3">
@@ -164,9 +170,11 @@ function Sidebar({ onLog }: { onLog: () => void }) {
           <Mic className="h-5 w-5" aria-hidden />
           {t("nav.log")}
         </button>
-        {NAV.slice(1).map((n) => (
-          <NavItem key={n.href} href={n.href} icon={n.icon} active={n.match(pathname)} label={t(n.labelKey)} />
-        ))}
+        {NAV.slice(1)
+          .filter((n) => !n.admin || isAdmin)
+          .map((n) => (
+            <NavItem key={n.href} href={n.href} icon={n.icon} active={n.match(pathname)} label={t(n.labelKey)} />
+          ))}
       </nav>
       <div className="mt-auto flex flex-col gap-4">
         <div className="self-start">
@@ -174,12 +182,7 @@ function Sidebar({ onLog }: { onLog: () => void }) {
         </div>
         {user && (
           <div className="flex items-center gap-3 rounded-2xl bg-surface-2 p-3">
-            {user.photoURL ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.photoURL} alt="" className="h-10 w-10 rounded-full" referrerPolicy="no-referrer" />
-            ) : (
-              <Monogram name={name || "S"} className="h-10 w-10 rounded-full text-base" />
-            )}
+            <Monogram name={name || "S"} className="h-10 w-10 rounded-full text-base" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{name || "SRM"}</p>
               <p className="truncate text-xs text-ink-3">{demo ? t("demo.banner").split("—")[0] : user.email}</p>
@@ -213,13 +216,14 @@ function NavItem({ href, icon: Icon, label, active }: { href: string; icon: type
 function BottomNav({ onMic }: { onMic: () => void }) {
   const pathname = usePathname();
   const { t } = useI18n();
-  const items = [NAV[0], NAV[1]];
+  // Vendors · Dues | mic | Reports · Settings
+  const items = [NAV[0], NAV[1], NAV[2], NAV[NAV.length - 1]];
   return (
     <nav
       aria-label="Main"
       className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto max-w-md lg:hidden print:hidden"
     >
-      <div className="relative flex h-[4.5rem] items-center justify-between rounded-[2rem] border border-line bg-surface/95 px-6 shadow-[var(--shadow-lift)] backdrop-blur">
+      <div className="relative flex h-[4.5rem] items-center justify-between rounded-[2rem] border border-line bg-surface/95 px-3 shadow-[var(--shadow-lift)] backdrop-blur">
         {items.map((n, i) => {
           const active = n.match(pathname);
           return (
@@ -227,7 +231,7 @@ function BottomNav({ onMic }: { onMic: () => void }) {
               key={n.href}
               href={n.href}
               aria-current={active ? "page" : undefined}
-              className={`flex w-20 flex-col items-center gap-1 text-xs font-semibold ${active ? "text-berry" : "text-ink-3"} ${i === 1 ? "order-3" : ""}`}
+              className={`flex w-16 flex-col items-center gap-1 text-[11px] font-semibold ${active ? "text-berry" : "text-ink-3"} ${i >= 2 ? "order-3" : ""}`}
             >
               <n.icon className="h-5 w-5" aria-hidden />
               {t(n.labelKey)}
@@ -317,55 +321,3 @@ function VendorPicker({ open, onClose }: { open: boolean; onClose: () => void })
   );
 }
 
-function SignIn() {
-  const { signIn } = useData();
-  const { notify, errorText } = useToast();
-  const { t } = useI18n();
-  return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-6">
-      <div className="absolute end-5 top-5">
-        <LangToggle />
-      </div>
-      {/* Floating petals */}
-      {[0, 1, 2, 3, 4].map((i) => (
-        <motion.span
-          key={i}
-          aria-hidden
-          className="absolute text-berry/25"
-          style={{ left: `${12 + i * 18}%`, top: `${10 + ((i * 37) % 70)}%` }}
-          animate={{ y: [0, -14, 0], rotate: [0, 20, 0] }}
-          transition={{ duration: 5 + i, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <FlowerMark className="h-8 w-8" />
-        </motion.span>
-      ))}
-      <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: "spring", stiffness: 200, damping: 24 }}
-        className="card relative w-full max-w-sm p-8 text-center"
-      >
-        <motion.span
-          className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[1.75rem] bg-gradient-to-b from-[var(--mic-1)] to-[var(--mic-2)] text-on-berry shadow-[var(--shadow-mic)]"
-          animate={{ rotate: [0, -4, 4, 0] }}
-          transition={{ duration: 4, repeat: Infinity }}
-        >
-          <Mic className="h-9 w-9" />
-        </motion.span>
-        <h1 className="text-2xl font-bold" dir="ltr">
-          SRM Voice Log
-        </h1>
-        <p className="mt-2 text-ink-2">{t("app.tagline")}</p>
-        <Button size="lg" className="mt-8 w-full" onClick={() => signIn().catch((e) => notify(errorText(e), "error"))}>
-          <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
-            <path fill="currentColor" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.4 3-7.3Z" />
-            <path fill="currentColor" opacity=".8" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z" />
-            <path fill="currentColor" opacity=".65" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14Z" />
-            <path fill="currentColor" opacity=".5" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 6 12 6Z" />
-          </svg>
-          {t("signin.google")}
-        </Button>
-      </motion.div>
-    </div>
-  );
-}

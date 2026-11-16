@@ -179,6 +179,7 @@ export function CaseCard({
                 </AnimatePresence>
               </div>
             )}
+            {c.createdByName && <p className="mt-2 text-xs text-ink-3">{t("case.loggedBy", { name: c.createdByName })}</p>}
           </motion.article>
         )}
       </AnimatePresence>
