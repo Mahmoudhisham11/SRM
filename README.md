@@ -185,22 +185,36 @@ Set **السنة الافتراضية** to the notebook's year. It stays set for
 
 Every field is a normal input. In guided mode, **Enter** moves to the next field, and Enter on the last field saves. **Ctrl/⌘+Enter** saves from anywhere, and **Space** pauses or resumes the mic. Date fields also have a calendar picker.
 
-### Dues (Supplier Invoices Status Report)
+### Dues (Supplier Invoices Analysis + Status Report)
 
-The **المستحقات / Dues** tab turns the ERP export **«DM AP Order To Pay»** into the finished *Supplier_Invoices_Status_Report* workbook. Choose the `.xlsx` (or drop it on the page), pick the **"Due up to"** date, and download. The file is processed in the browser and never uploaded.
+The **المستحقات / Dues** tab takes the ERP export **«DM AP Order To Pay»** and gives back the finished **Supplier_Invoices_Analysis** workbook. The workbook is split exactly like the hand-made one:
 
-The workbook has three sheets:
+| Sheet | Rows |
+|---|---|
+| **Filtered** | everything else, by Due Date (Amount Remaining = `L-M` formula) |
+| **Advance** | Filtered rows that are PREPAYMENT with an empty Check Status |
+| **Applied** | Applied Amount ≠ 0 and Check Status empty/blank, by Due Date |
+| **Fixed** | vendors on the *Fixed* list, grouped by vendor with a «… Total» row each and a Grand Total, collapsed |
+| **Masader** | vendors on the *Masader* list (DEBIT notes excluded), by Due Date |
+| **Original** | the uploaded sheet |
 
-1. **The original sheet**, unchanged. The only exception: formulas that point at another workbook (`[1]Filtered!…`) are replaced by their last values, so the file opens without broken links.
-2. **Final**, an Excel table (TableStyleMedium2, Segoe UI 10) with a total in row 3. It contains every invoice that is still to be paid:
-   - **Check Status** is empty, a blank, or `UNDER_SIGNATURE` (not `DELIVERED` / `IN_SAFE`);
-   - **Applied Amount** = 0;
-   - **Due Date** ≤ the chosen date.
+DEBIT notes and vendors on the *left-out* list go to no sheet. The layout follows the hand-made file:
 
-   Debit notes (negative amounts) are included. Rows are sorted by company, then by amount.
-3. **Breakdown**: Sum of Invoice Amount by Org Name › Invoice Type › Check Status, across Due Date years and months, plus the *Supplier Invoices Dues* summary.
+- SUBTOTALs on row 1 and headers on row 2.
+- Panes frozen at E3, zoom 90 %, and AutoFilter.
+- Segoe UI 10; amounts `#,##0.00_ ;[Red]\-#,##0.00\ `; dates `d-mmm-yy`.
+- Org Name shortened to DMC / Curve, and «supplier» capitalised.
 
-These rules were checked against the hand-made reports of 06-11-2026 and 14-11-2026. The same 730 / 499 invoices come out, and the grand totals and every summary line are identical. Columns are found by their header names, so their order doesn't matter. Rows whose Due Date or amount can't be read are listed on screen, never dropped silently.
+**The lists are learned, not hard-coded.** Which vendors are Fixed, Masader or left out, and the few invoices placed by hand, are the analyst's decisions.
+
+- **First time:** upload your latest hand-made Analysis workbook (**«ارفع ملف Analysis»**). The app learns the lists and the single-invoice decisions from it.
+- **After that:** every new ERP sheet is split the same way.
+- **Vendors that aren't on any list** are shown after each run, with one-tap *Fixed* / *Leave out* buttons. You can also remove vendors from a list, or re-learn from a newer workbook.
+- **Where the lists are stored:** in Firestore (`srmVoiceLog/shared/settings/duesAnalysis`) so the whole team shares them, plus a copy on the device. They are never stored in the code, because the repository is public.
+
+Checked against the hand-made 14-11-2026 workbook: the generated file matches it cell for cell in all six sheets, in the same order. The only difference is the row-1 SUBTOTAL of Masader, which the hand-made file saved while a filter was on. The 06-11-2026 workbook has the same rows in every sheet, but sorted the older way.
+
+The **Status Report** (original + Final + Breakdown) is one more button on the same page. Final holds the invoices still to be paid: Check Status empty, blank or `UNDER_SIGNATURE`, Applied Amount 0, and Due Date ≤ the report date. Breakdown sums Invoice Amount by Org › Invoice Type › Check Status across due-date years and months. Both files are processed in the browser and never uploaded.
 
 ### Settings
 

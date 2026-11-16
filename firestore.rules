@@ -72,6 +72,11 @@ service cloud.firestore {
         allow update: if signedIn() && srmValidCase(request.resource.data)
           && request.resource.data.get('createdBy', null) == resource.data.get('createdBy', null);
       }
+
+      // Shared app settings (e.g. the Dues › Analysis vendor lists).
+      match /settings/{settingId} {
+        allow read, write: if signedIn();
+      }
     }
 
     // Data from before the shared space: its owner can still read it (to copy it)
