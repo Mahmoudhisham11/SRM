@@ -20,7 +20,7 @@ Built for back-filling a year of notebook entries quickly, then for day-to-day l
 | **Parsing** | Spoken dates (`15 مارس`, `15/3`, `خمستاشر تلاتة`, `النهارده`, `امبارح`, `اول امبارح`, `آخر فبراير`, English months, Arabic-Indic digits) and amounts (`801 ألف` → 801,000, `مليون وربع` → 1,250,000). A session-level **default year** applies to back-filled dates spoken without a year. |
 | **Review** | Each saved case shows as an editable card. Tap a field to fix it by keyboard, or tap its mic to re-dictate just that field. The original audio is kept so you can replay it. |
 | **Reports** | One table of all cases with search, sorting and filters (vendor, date range, status, keyword). Summary tiles, cases per month and per vendor, and average resolution time. |
-| **Accounts** | Sign up with name, email and password. **An admin approves every new account**, and everyone approved works on the **same shared data**. There's a **Users** page for admins and a password reset. |
+| **Accounts** | Sign in with just a **name and a password**. Everyone works on the **same shared data**; there are no roles or approvals. |
 | **Dues** | Upload the ERP sheet «DM AP Order To Pay» and download the **Supplier Invoices Status Report** (original + Final + Breakdown). |
 | **Manager report** | This week / this month / last month / custom range. Shows totals plus a table grouped by vendor. **Export to Excel** (grouped by vendor, with a Vendor column). |
 | **Export** | **Excel** in the SRM_Issues_Log format (`Case | Task By | Start Date | End Date | Comments`, `DD-MMM-YYYY`, Arial 10, optional **Vendor** column), plus **CSV**. |
@@ -43,7 +43,7 @@ Open http://localhost:3000 in **Chrome or Edge**. Without Firebase settings the 
 ## 2. Firebase setup
 
 1. **Create a project** at https://console.firebase.google.com.
-2. **Authentication** → *Get started* → *Sign-in method* → enable **Email/Password**. (Keep **Google** enabled only until the one-time admin setup below is done, then you can turn it off.)
+2. **Authentication** → *Get started* → *Sign-in method* → enable **Email/Password** (used behind the scenes for name + password sign-in).
 3. **Firestore Database** → *Create database* → **production mode**. Pick a nearby location, e.g. `europe-west1` or `me-central1`.
 4. **Storage** → *Get started*. This holds the original audio clips.
    > Cloud Storage for Firebase needs the **Blaze (pay-as-you-go)** plan on new projects. It still has a free monthly allowance, and short voice clips are tiny (≈ 5–15 KB per case).
@@ -67,7 +67,7 @@ Open http://localhost:3000 in **Chrome or Edge**. Without Firebase settings the 
    These values are public by design: they identify the project. Security comes from the rules in step 7.
 7. **Deploy the security rules.**
 
-   **Project shared with another app?** Don't deploy (that would replace the other app's rules). In the Firebase console, go to **Firestore → Rules**. Copy everything between the `SRM Voice Log — begin` and `SRM Voice Log — end` markers in `firestore.rules`, paste it inside your existing `match /databases/{database}/documents { … }` (replacing any older `srmVoiceLog` block), and **Publish**. Do the same with the two `match /srmVoiceLog/…` blocks of `storage.rules` under **Storage → Rules**. The first Storage publish asks to let Storage read Firestore (needed for the approval check): allow it. The blocks only affect `srmVoiceLog`.
+   **Project shared with another app?** Don't deploy (that would replace the other app's rules). In the Firebase console, go to **Firestore → Rules**. Copy everything between the `SRM Voice Log — begin` and `SRM Voice Log — end` markers in `firestore.rules`, paste it inside your existing `match /databases/{database}/documents { … }` (replacing any older `srmVoiceLog` block), and **Publish**. Do the same with the two `match /srmVoiceLog/…` blocks of `storage.rules` under **Storage → Rules**. The blocks only affect `srmVoiceLog`.
 
    **Dedicated project?** Deploy both files:
 
@@ -77,19 +77,16 @@ Open http://localhost:3000 in **Chrome or Edge**. Without Firebase settings the 
    npx firebase-tools deploy --only firestore:rules,storage
    ```
 
-8. Restart `npm run dev`. The first admin is set up once (next section); everyone else creates an account and waits for approval.
+8. Restart `npm run dev` and create an account (name + password).
 
-### Accounts, approval and the one-time admin setup
+### Accounts
 
-Everyone signs in with **name, email and password**. A new account starts as **waiting for approval** and sees no data until an admin approves it on the **Users** page. That page is visible to admins only. There, an admin can approve, turn off or turn back on, make admin or remove admin, and remove accounts. Changes apply immediately: an approved person's app opens by itself, and a turned-off person is locked out at once. Admins can't demote or remove themselves, so there's always an admin. **Forgot your password?** sends a reset link by email.
+Sign-in is just a **name and a password**. **Create account** takes a name and a password (6+ characters), and you're in right away. Everyone who signs in works on the **same shared data**. There are no roles or approvals.
 
-**Admin setup (once).** Before accounts existed, each person's data lived under their Google account. On the sign-in screen, the owner taps **«أول مرة؟ إعداد الأدمن ونقل البيانات القديمة»**, enters a name and a new password, and continues with Google one last time. That:
-
-1. links the password to the **same** account, so from then on the owner signs in with that Google email and the new password;
-2. makes the account the first **admin**;
-3. copies its vendors and cases into the shared space. If anything is missing later, use **Settings → Copy old data again**; nothing is duplicated.
-
-Only an account that really owns old data can do this, and only once. The rules check both. The link disappears once setup is done.
+- Names are matched loosely, so «أحمد» = «احمد», and extra spaces or capital letters don't matter. Two people can't pick the same name.
+- Under the hood, Firebase Auth needs an email, so each name maps to a fixed internal address (a hash of the name). Keep **Email/Password** enabled in Firebase. People never see that address.
+- There's no email, so there's no "forgot password" link. To reset someone's password, delete their user in Firebase console → Authentication → Users and let them create the account again. Their cases stay.
+- The app is public, so anyone who has the link can create an account and see the data.
 
 ### Importing your supplier list
 
@@ -103,18 +100,16 @@ On the Vendors page, tap **Import from Excel** and choose an `.xlsx` with the co
 ### Data layout and rules
 
 ```
-srmVoiceLog/shared/vendors/{vendorId}       Vendor (shared by everyone approved)
+srmVoiceLog/shared/vendors/{vendorId}       Vendor (shared by everyone signed in)
 srmVoiceLog/shared/cases/{caseId}           Case (flat, with vendorId; stamped with who logged it)
-srmVoiceLog/shared/users/{uid}              Account: name, email, role (admin/member), status (pending/approved/disabled)
-srmVoiceLog/shared/meta/setup               Written once by the one-time admin setup
 storage: srmVoiceLog/shared/audio/{caseId}  original recording
 srmVoiceLog/{uid}/…                         data from before shared accounts (read-only for its owner)
 ```
 
 The app keeps everything under its own `srmVoiceLog` root, so it can **share a Firebase project with another app** without touching that app's collections.
 
-- `firestore.rules`: only **approved** accounts read or write vendors and cases. New accounts can only create themselves as *pending members*; only admins change status or role. Every case is still validated: a required Case, ISO dates, **End Date ≥ Start Date**, `status` = `closed` exactly when End Date is set, and `createdBy` can only be your own uid.
-- `storage.rules`: approved accounts only (checked against Firestore), audio content types only, 20 MB max.
+- `firestore.rules`: anyone **signed in** reads and writes vendors and cases; signed-out visitors get nothing. Every case is still validated: a required Case, ISO dates, **End Date ≥ Start Date**, `status` = `closed` exactly when End Date is set, and `createdBy` can only be your own uid.
+- `storage.rules`: signed-in accounts only, audio content types only, 20 MB max.
 
 ---
 
@@ -209,7 +204,7 @@ These rules were checked against the hand-made reports of 06-11-2026 and 14-11-2
 
 ### Settings
 
-Your name (saved on your account; shown in greetings and on the cases you log) · language · appearance (Light / Evening / Auto) · Arabic form of address · dictation language (Arabic-Egypt or English) · copy old data again (admin) · sign out.
+Your name (saved on your account; shown in greetings and on the cases you log) · language · appearance (Light / Evening / Auto) · Arabic form of address · dictation language (Arabic-Egypt or English) · sign out.
 
 ### Browser support
 
@@ -277,7 +272,7 @@ CASE_PARSERS.llm = new LlmCaseParser();
 ```bash
 npm run dev          # http://localhost:3000
 npm test             # unit tests: Arabic date/number parsers, voice commands, guided flow, free-mode parser, reports, Excel/CSV
-npm run test:rules   # security rules + the one-time admin setup, on the Firebase emulators (needs Java; fetches firebase-tools via npx)
+npm run test:rules   # security-rules tests on the Firebase emulators (needs Java; fetches firebase-tools via npx)
 npm run lint
 npm run build
 ```

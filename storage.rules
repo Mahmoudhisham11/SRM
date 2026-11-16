@@ -1,25 +1,16 @@
 rules_version = '2';
 
 // SRM Voice Log — Storage rules for the original case recordings.
-//   srmVoiceLog/shared/audio/{caseId}  read/write for approved accounts (checked
-//                                      against Firestore), audio only, < 20 MB
+//   srmVoiceLog/shared/audio/{caseId}  any signed-in account, audio only, < 20 MB
 //   srmVoiceLog/{uid}/audio/{caseId}   recordings from before the shared space:
 //                                      read-only for their owner
-//
-// The first Publish asks to let Storage read Firestore (for the approval
-// check): allow it.
 // Sharing the bucket with another app? Paste just the two `match /srmVoiceLog/…`
 // blocks into your existing `match /b/{bucket}/o { … }`.
 service firebase.storage {
   match /b/{bucket}/o {
     match /srmVoiceLog/shared/audio/{caseId} {
-      function approved() {
-        return request.auth != null
-          && firestore.exists(/databases/(default)/documents/srmVoiceLog/shared/users/$(request.auth.uid))
-          && firestore.get(/databases/(default)/documents/srmVoiceLog/shared/users/$(request.auth.uid)).data.status == 'approved';
-      }
-      allow read, delete: if approved();
-      allow create, update: if approved()
+      allow read, delete: if request.auth != null;
+      allow create, update: if request.auth != null
         && request.resource.size < 20 * 1024 * 1024
         && request.resource.contentType.matches('audio/.*');
     }

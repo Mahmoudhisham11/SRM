@@ -1,130 +1,93 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getFirebase, isAudioStorageEnabled, isFirebaseConfigured } from "@/lib/firebase";
 import type { DataRepo } from "@/lib/data/repo";
 import { LocalRepo } from "@/lib/data/localRepo";
 import { FirestoreRepo } from "@/lib/data/firestoreRepo";
 import { flushPendingAudio } from "@/lib/data/audioUpload";
-import { createPendingProfile, watchProfile, type UserProfile } from "@/lib/auth/users";
+import { usernameEmail } from "@/lib/auth/username";
 
 export interface AppUser {
   uid: string;
   name: string;
-  email: string;
-  photoURL: string | null;
 }
 
-/**
- * - signedOut: show the sign-in / create-account screen
- * - pending:   signed in, waiting for an admin to approve the account
- * - disabled:  an admin turned the account off
- * - signedIn:  approved — full access to the shared data
- */
-export type AuthState =
-  | { status: "loading" }
-  | { status: "signedOut" }
-  | { status: "pending"; user: AppUser; profile: UserProfile | null; error?: string }
-  | { status: "disabled"; user: AppUser; profile: UserProfile }
-  | { status: "signedIn"; user: AppUser; profile: UserProfile; repo: DataRepo };
+/** Signed in = full access to the shared data (no roles, no approval). */
+export type AuthState = { status: "loading" } | { status: "signedOut" } | { status: "signedIn"; user: AppUser; repo: DataRepo };
 
 interface DataContextValue {
   auth: AuthState;
   demo: boolean;
-  signIn(email: string, password: string): Promise<void>;
-  signUp(name: string, email: string, password: string): Promise<void>;
-  resetPassword(email: string): Promise<void>;
+  signIn(name: string, password: string): Promise<void>;
+  signUp(name: string, password: string): Promise<void>;
+  rename(name: string): Promise<void>;
   signOut(): Promise<void>;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
 
-const DEMO_USER: AppUser = { uid: "demo", name: "", email: "", photoURL: null };
-const DEMO_PROFILE: UserProfile = { uid: "demo", name: "", email: "", role: "admin", status: "approved", createdAt: 0, updatedAt: 0 };
+const DEMO_USER: AppUser = { uid: "demo", name: "" };
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
   const demo = !isFirebaseConfigured;
-  /** Name typed on the sign-up form, used for the new account's profile. */
-  const signUpName = useRef<string | null>(null);
 
   useEffect(() => {
     if (demo) {
       // LocalRepo needs window/localStorage, so it can only be created after mount.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAuth({ status: "signedIn", user: DEMO_USER, profile: DEMO_PROFILE, repo: new LocalRepo() });
+      setAuth({ status: "signedIn", user: DEMO_USER, repo: new LocalRepo() });
       return;
     }
     const { auth: fbAuth, db, storage } = getFirebase();
-    let unsubAuth = () => {};
-    let unsubProfile = () => {};
+    let unsub = () => {};
     let cancelled = false;
     import("firebase/auth").then(({ onAuthStateChanged }) => {
       if (cancelled) return;
-      unsubAuth = onAuthStateChanged(fbAuth, (u) => {
-        unsubProfile();
-        unsubProfile = () => {};
+      unsub = onAuthStateChanged(fbAuth, (u) => {
         if (!u) return setAuth({ status: "signedOut" });
-        const user: AppUser = { uid: u.uid, name: u.displayName ?? "", email: u.email ?? "", photoURL: null };
-        let repo: FirestoreRepo | null = null;
-        let creating = false;
-        unsubProfile = watchProfile(
-          db,
-          u.uid,
-          (profile) => {
-            if (!profile) {
-              // New account (or one an admin removed): ask for access again.
-              setAuth({ status: "pending", user, profile: null });
-              if (!creating) {
-                creating = true;
-                const name = signUpName.current || u.displayName || (u.email ?? "").split("@")[0];
-                createPendingProfile(db, u.uid, name, u.email ?? "").catch((e) =>
-                  setAuth({ status: "pending", user, profile: null, error: String((e as { code?: string }).code ?? e) }),
-                );
-              }
-              return;
-            }
-            creating = false;
-            const named = { ...user, name: profile.name || user.name };
-            if (profile.status === "approved") {
-              // Keep the same repo while the name doesn't change (a new repo re-subscribes every list).
-              if (!repo || repo.actorName !== named.name) repo = new FirestoreRepo(db, storage, { uid: u.uid, name: named.name }, isAudioStorageEnabled);
-              setAuth({ status: "signedIn", user: named, profile, repo });
-            } else if (profile.status === "disabled") setAuth({ status: "disabled", user: named, profile });
-            else setAuth({ status: "pending", user: named, profile });
-          },
-          (e) => setAuth({ status: "pending", user, profile: null, error: String((e as { code?: string }).code ?? e) }),
-        );
+        const user = { uid: u.uid, name: u.displayName ?? "" };
+        setAuth({ status: "signedIn", user, repo: new FirestoreRepo(db, storage, user, isAudioStorageEnabled) });
       });
     });
     return () => {
       cancelled = true;
-      unsubAuth();
-      unsubProfile();
+      unsub();
     };
   }, [demo]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (name: string, password: string) => {
     const { signInWithEmailAndPassword } = await import("firebase/auth");
-    await signInWithEmailAndPassword(getFirebase().auth, email.trim(), password);
+    await signInWithEmailAndPassword(getFirebase().auth, await usernameEmail(name), password);
   }, []);
 
-  const signUp = useCallback(async (name: string, email: string, password: string) => {
+  const signUp = useCallback(async (name: string, password: string) => {
     const { createUserWithEmailAndPassword, updateProfile } = await import("firebase/auth");
-    signUpName.current = name.trim();
-    const { user } = await createUserWithEmailAndPassword(getFirebase().auth, email.trim(), password);
-    await updateProfile(user, { displayName: name.trim() }).catch(() => undefined);
+    const { auth: fbAuth, db, storage } = getFirebase();
+    const display = name.replace(/\s+/g, " ").trim();
+    const { user } = await createUserWithEmailAndPassword(fbAuth, await usernameEmail(name), password);
+    await updateProfile(user, { displayName: display });
+    // onAuthStateChanged fired before the name was saved: refresh it.
+    const me = { uid: user.uid, name: display };
+    setAuth({ status: "signedIn", user: me, repo: new FirestoreRepo(db, storage, me, isAudioStorageEnabled) });
   }, []);
 
-  const resetPassword = useCallback(async (email: string) => {
-    const { sendPasswordResetEmail } = await import("firebase/auth");
-    await sendPasswordResetEmail(getFirebase().auth, email.trim());
+  /** Change the name shown in greetings and on the cases you log (sign-in name stays the same). */
+  const rename = useCallback(async (name: string) => {
+    const { updateProfile } = await import("firebase/auth");
+    const { auth: fbAuth, db, storage } = getFirebase();
+    const u = fbAuth.currentUser;
+    if (!u) return;
+    const display = name.replace(/\s+/g, " ").trim();
+    await updateProfile(u, { displayName: display });
+    const me = { uid: u.uid, name: display };
+    setAuth({ status: "signedIn", user: me, repo: new FirestoreRepo(db, storage, me, isAudioStorageEnabled) });
   }, []);
 
   const signOut = useCallback(async () => {
     if (demo) return;
     const { signOut: fbSignOut } = await import("firebase/auth");
-    signUpName.current = null;
     await fbSignOut(getFirebase().auth);
   }, [demo]);
 
@@ -138,7 +101,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("online", flush);
   }, [repo]);
 
-  const value = useMemo(() => ({ auth, demo, signIn, signUp, resetPassword, signOut }), [auth, demo, signIn, signUp, resetPassword, signOut]);
+  const value = useMemo(() => ({ auth, demo, signIn, signUp, rename, signOut }), [auth, demo, signIn, signUp, rename, signOut]);
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
@@ -148,15 +111,9 @@ export function useData(): DataContextValue {
   return ctx;
 }
 
-/** Repo for signed-in pages (AuthGate guarantees it exists below it). */
+/** Repo for signed-in pages (AppShell guarantees it exists below it). */
 export function useRepo(): DataRepo {
   const { auth } = useData();
   if (auth.status !== "signedIn") throw new Error("useRepo before sign-in");
   return auth.repo;
-}
-
-/** The signed-in, approved user's profile (role decides admin-only screens). */
-export function useProfile(): UserProfile | null {
-  const { auth } = useData();
-  return auth.status === "signedIn" ? auth.profile : null;
 }
