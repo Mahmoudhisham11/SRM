@@ -74,7 +74,7 @@ export function useDocumentPrefs() {
     el.lang = lang;
     el.dir = dir;
     el.classList.toggle("dark", theme === "evening");
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "evening" ? "#1e121f" : "#fcf6f1");
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "evening" ? "#0b1220" : "#f4f7fb");
   }, [lang, dir, theme]);
 }
 

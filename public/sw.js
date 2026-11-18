@@ -2,12 +2,13 @@
 // Bump CACHE_VERSION when this file's caching rules change: the old cache is
 // deleted on activate. App code needs no bump — pages are network-first and
 // /_next/static files have content-hashed names.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const CACHE_NAME = `srm-voice-v${CACHE_VERSION}`;
 
 const PRECACHE_ASSETS = [
   "/",
-  "/icon.svg",
+  "/favicon.png",
+  "/brand-logo.webp",
   "/icons/icon-192x192.png",
   "/icons/icon-512x512.png",
   "/icons/apple-touch-icon.png",
@@ -94,7 +95,7 @@ self.addEventListener("fetch", (event) => {
   if (
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/icons/") ||
-    url.pathname === "/icon.svg" ||
+    url.pathname === "/brand-logo.webp" ||
     url.pathname.match(/\.(png|jpg|jpeg|svg|webp|woff2|woff|ttf|css|js)$/)
   ) {
     event.respondWith(

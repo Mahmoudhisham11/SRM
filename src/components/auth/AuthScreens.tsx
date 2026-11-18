@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { motion } from "motion/react";
 import { KeyRound, UserPlus } from "lucide-react";
 import { useData } from "@/components/providers/DataProvider";
-import { Button, FlowerMark, LangToggle, TextField } from "@/components/ui";
+import { BrandLogo, Button, LangToggle, TextField } from "@/components/ui";
 import { useI18n } from "@/lib/i18n/useI18n";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { MIN_PASSWORD, nameProblem } from "@/lib/auth/username";
@@ -66,18 +66,6 @@ export function AuthScreen() {
       <div className="absolute end-5 top-5">
         <LangToggle />
       </div>
-      {[0, 1, 2, 3, 4].map((i) => (
-        <motion.span
-          key={i}
-          aria-hidden
-          className="absolute text-berry/20"
-          style={{ left: `${12 + i * 18}%`, top: `${10 + ((i * 37) % 70)}%` }}
-          animate={{ y: [0, -14, 0], rotate: [0, 20, 0] }}
-          transition={{ duration: 5 + i, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <FlowerMark className="h-8 w-8" />
-        </motion.span>
-      ))}
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -85,9 +73,9 @@ export function AuthScreen() {
         className="card relative w-full max-w-sm p-7"
       >
         <div className="mb-6 text-center">
-          <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-gradient-to-b from-[var(--mic-1)] to-[var(--mic-2)] text-on-berry shadow-[var(--shadow-mic)]">
-            <FlowerMark className="h-8 w-8" />
-          </span>
+          <div className="mb-5 flex justify-center">
+            <BrandLogo className="h-20" />
+          </div>
           <h1 className="text-2xl font-bold" dir="ltr">
             SRM Voice Log
           </h1>

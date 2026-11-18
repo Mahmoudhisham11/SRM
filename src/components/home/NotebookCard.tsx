@@ -10,7 +10,7 @@ const MONTH_LETTERS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D
 
 /**
  * "دفتر 2025" — progress through digitising a year of notebooks.
- * One petal per month: filled when that month has cases; the month in
+ * One dot per month: filled when that month has cases; the month in
  * progress (current month of the current year) is dashed.
  */
 export function NotebookCard({ stats, sessionCount, compact = false }: { stats: NotebookStats; sessionCount: number; compact?: boolean }) {
@@ -52,7 +52,7 @@ export function NotebookCard({ stats, sessionCount, compact = false }: { stats: 
           </p>
         )}
       </div>
-      <PetalRing months={stats.months} currentMonth={currentMonth} total={stats.total} label={t("notebook.cases")} />
+      <MonthRing months={stats.months} currentMonth={currentMonth} total={stats.total} label={t("notebook.cases")} />
     </section>
   );
 }
@@ -68,7 +68,7 @@ function Chip({ icon, children }: { icon: React.ReactNode; children: React.React
   );
 }
 
-function PetalRing({ months, currentMonth, total, label }: { months: boolean[]; currentMonth: number; total: number; label: string }) {
+function MonthRing({ months, currentMonth, total, label }: { months: boolean[]; currentMonth: number; total: number; label: string }) {
   return (
     <div className="relative h-28 w-28 shrink-0 sm:h-32 sm:w-32" aria-hidden>
       <svg viewBox="-60 -60 120 120" className="h-full w-full">
@@ -77,11 +77,10 @@ function PetalRing({ months, currentMonth, total, label }: { months: boolean[]; 
           return (
             // Rotation lives on <g>: motion's own transform (scale) would replace it otherwise.
             <g key={i} transform={`rotate(${i * 30})`}>
-            <motion.ellipse
+            <motion.circle
               cx={0}
-              cy={-44}
-              rx={6.5}
-              ry={11}
+              cy={-45}
+              r={7.5}
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.05 * i, type: "spring", stiffness: 300, damping: 18 }}

@@ -7,7 +7,7 @@ Built for back-filling a year of notebook entries quickly, then for day-to-day l
 
 **Bilingual:** full Arabic (RTL, default) and English (LTR) UI, switched from the «EN | ع» toggle and remembered per device. The five field labels (Case, Task By, Start Date, End Date, Comments) stay in English in both languages to match the `SRM_Issues_Log.xlsx` headers. Arabic text addresses the user in the feminine form («قولي»، «اضغطي»); this can be switched to masculine in **Settings**.
 
-**Design:** "Rose & Berry" light theme plus an "Evening" dark theme (or Auto). Readex Pro for Arabic and Latin text, with Fraunces for English headings. Every screen is mobile-first: a bottom bar with a center mic on phones, a sidebar on desktop.
+**Design:** blue-and-white light theme plus a dark mode (or Auto), with the DMC Contracting · Curve Landscape logo. Readex Pro for Arabic and Latin text, with Fraunces for English headings. Every screen is mobile-first: a bottom bar with a center mic on phones, a sidebar on desktop.
 
 ---
 
@@ -24,7 +24,7 @@ Built for back-filling a year of notebook entries quickly, then for day-to-day l
 | **Dues** | Upload the ERP sheet «DM AP Order To Pay» and download the **Supplier Invoices Status Report** (original + Final + Breakdown). |
 | **Manager report** | This week / this month / last month / custom range. Shows totals plus a table grouped by vendor. **Export to Excel** (grouped by vendor, with a Vendor column). |
 | **Export** | **Excel** in the SRM_Issues_Log format (`Case | Task By | Start Date | End Date | Comments`, `DD-MMM-YYYY`, Arial 10, optional **Vendor** column), plus **CSV**. |
-| **Experience** | Greeting with her name, today's count, and a «دفتر 2025» notebook ring (one petal per month), day streak and next milestone. The mic's aura follows her voice level, the chip for a recognised command flashes, and on save a check draws itself with a sparkle burst while the case drops into the session list. Milestones get a petal burst. Swipe a history row to close it today or delete it (with Undo). The phone vibrates on save and on field changes. Everything respects "reduce motion". |
+| **Experience** | Greeting with her name, today's count, and a «دفتر 2025» notebook ring (one dot per month), day streak and next milestone. The mic's aura follows her voice level, the chip for a recognised command flashes, and on save a check draws itself with a sparkle burst while the case drops into the session list. Milestones get a petal burst. Swipe a history row to close it today or delete it (with Undo). The phone vibrates on save and on field changes. Everything respects "reduce motion". |
 | **Quality** | Per-user security rules, offline-tolerant (Firestore cache with queued writes), and loading, empty and error states. About 210 unit tests for the parsers, reports and export, plus 11 security-rules tests against the Firebase emulators. |
 
 ---
@@ -218,7 +218,7 @@ The **Status Report** (original + Final + Breakdown) is one more button on the s
 
 ### Settings
 
-Your name (saved on your account; shown in greetings and on the cases you log) · language · appearance (Light / Evening / Auto) · Arabic form of address · dictation language (Arabic-Egypt or English) · sign out.
+Your name (saved on your account; shown in greetings and on the cases you log) · language · appearance (Light / Dark mode / Auto) · Arabic form of address · dictation language (Arabic-Egypt or English) · sign out.
 
 ### Browser support
 

@@ -2,7 +2,6 @@
 
 import { AnimatePresence, motion, useTransform, type MotionValue } from "motion/react";
 import { AudioLines, Mic, Pause } from "lucide-react";
-import { FlowerMark } from "@/components/ui";
 import { useI18n } from "@/lib/i18n/useI18n";
 import { CASE_FIELDS, FIELD_LABELS } from "@/lib/types";
 import type { VoiceCommand } from "@/lib/voice/commands";
@@ -72,7 +71,7 @@ export function MicOrb({
 
 /**
  * Plays over the mic after a save: a check that draws itself in a mint disc,
- * plus a ring of sparkles (or petals for a milestone). ~0.9s, never blocks input.
+ * plus a ring of sparkles (a bigger burst of dots for a milestone). ~0.9s, never blocks input.
  */
 export function SaveBurst({ id, big }: { id: number; big: boolean }) {
   const n = big ? 18 : 10;
@@ -109,7 +108,7 @@ export function SaveBurst({ id, big }: { id: number; big: boolean }) {
                 aria-hidden
               >
                 {big ? (
-                  <FlowerMark className="h-5 w-5" />
+                  <span className={`block rounded-full ${i % 2 ? "h-3 w-3 bg-berry" : "h-2.5 w-2.5 bg-berry-soft"}`} />
                 ) : (
                   <svg viewBox="0 0 10 10" className="h-3 w-3" fill="currentColor">
                     <path d="M5 0l1.2 3.8L10 5 6.2 6.2 5 10 3.8 6.2 0 5l3.8-1.2Z" />

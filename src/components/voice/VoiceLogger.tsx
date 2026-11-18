@@ -164,7 +164,7 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
         }),
       );
 
-      // Celebration: milestone in this year's notebook → big petals; else sparkles.
+      // Celebration: milestone in this year's notebook → a bigger burst; else sparkles.
       const before = statsRef.current.total;
       const inYear = Number(draft.startDate!.slice(0, 4)) === statsRef.current.year;
       const milestone = inYear ? crossedMilestone(before, before + 1) : null;
