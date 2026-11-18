@@ -23,7 +23,7 @@ const VARIANTS: Record<Variant, string> = {
   soft: "bg-surface-pink text-berry hover:bg-berry-tint",
   outline: "bg-surface text-ink border border-line-strong hover:bg-surface-2",
   ghost: "text-ink-2 hover:bg-surface-2",
-  danger: "bg-danger text-white hover:opacity-90 dark:text-[#3a0d1a]",
+  danger: "bg-danger text-white hover:opacity-90 dark:text-[#2a0710]",
 };
 const SIZES = { sm: "h-9 px-3.5 text-sm", md: "h-11 px-5 text-sm", lg: "h-13 px-6 text-base" };
 
@@ -188,7 +188,7 @@ export function Sheet({
       {open && (
         <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center md:p-6">
           <motion.div
-            className="absolute inset-0 bg-[#2a1a25]/40 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-[#0b1220]/45 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -392,23 +392,27 @@ export function LangToggle() {
   );
 }
 
-export function FlowerMark({ className = "h-6 w-6" }: { className?: string }) {
+/**
+ * DMC Contracting | Curve Landscape. The logo has black lettering, so in dark
+ * mode it sits on a small white card to stay readable.
+ */
+export function BrandLogo({ className = "h-9" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round">
-      {[0, 72, 144, 216, 288].map((r) => (
-        <path key={r} d="M16 15c-2.6-3.6-2.6-8 0-10.6 2.6 2.6 2.6 7 0 10.6Z" transform={`rotate(${r} 16 16)`} />
-      ))}
-      <circle cx="16" cy="16" r="1.8" fill="currentColor" stroke="none" />
-    </svg>
+    <span className="inline-flex shrink-0 rounded-xl dark:bg-white dark:px-2 dark:py-1" dir="ltr">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand-logo.webp" alt="DMC Contracting · Curve Landscape" width={640} height={245} className={`w-auto ${className}`} draggable={false} />
+    </span>
   );
 }
 
 export function Logo({ full = false }: { full?: boolean }) {
-  return (
-    <span className="flex items-center gap-2 text-berry" dir="ltr">
-      <FlowerMark className="h-7 w-7" />
-      <span className="font-bold tracking-wide text-ink">{full ? "SRM Voice Log" : "SRM"}</span>
+  return full ? (
+    <span className="flex flex-col items-start gap-2" dir="ltr">
+      <BrandLogo className="h-12" />
+      <span className="text-sm font-bold tracking-wide text-ink-2">SRM Voice Log</span>
     </span>
+  ) : (
+    <BrandLogo className="h-9" />
   );
 }
 

@@ -1,71 +1,72 @@
 @import "tailwindcss";
 
-/* Evening theme = .dark on <html> (set from Settings, before paint). */
+/* Dark mode = .dark on <html> (set from Settings, before paint). */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ---------------------------------------------------------------------------
-   Design tokens — "Rose & Berry" (light) / "Evening" (dark)
-   Semantic names; components use bg-surface, text-ink, bg-berry, …
+   Design tokens — blue & white (light) / dark mode.
+   Semantic names; components use bg-surface, text-ink, bg-berry (= the
+   primary brand blue), … — only the values change between themes.
 --------------------------------------------------------------------------- */
 :root {
-  --bg: #fcf6f1;
-  --glow-1: #f6d9e3; /* top blush glow */
-  --glow-2: #e8dcf3; /* lavender blob */
-  --surface: #fffdfb;
-  --surface-2: #f6eee9; /* nested / segmented background */
-  --surface-pink: #f8e3ea; /* tinted tile, soft buttons */
-  --line: #efe1e3;
-  --line-strong: #dcc5cd;
-  --ink: #2a1a25;
-  --ink-2: #5d4855;
-  --ink-3: #75606c;
-  --berry: #962b5b; /* primary */
-  --berry-strong: #74204a;
-  --berry-soft: #e7c4d3; /* light bars, soft fills */
-  --berry-tint: #f5dbe5; /* highlight under text, active chip */
+  --bg: #f4f7fb;
+  --glow-1: #dde9fb; /* soft blue glow, top */
+  --glow-2: #e9f0fa; /* second glow, bottom */
+  --surface: #ffffff;
+  --surface-2: #eef3f9; /* nested / segmented background */
+  --surface-pink: #e6effc; /* tinted tile, soft buttons (light blue) */
+  --line: #e1e8f1;
+  --line-strong: #c9d5e4;
+  --ink: #0f1b2d;
+  --ink-2: #3a495e;
+  --ink-3: #5b6a80;
+  --berry: #1d5bb8; /* primary blue */
+  --berry-strong: #154a99;
+  --berry-soft: #c5d8f3; /* light bars, soft fills */
+  --berry-tint: #dce8f9; /* highlight under text, active chip */
   --on-berry: #ffffff;
-  --mic-1: #a8346a;
-  --mic-2: #6e1e45;
-  --open: #8f4b0c;
-  --open-bg: #fce7d2;
-  --closed: #2c6a41;
-  --closed-bg: #dcefe2;
-  --danger: #b8304b;
-  --danger-bg: #fbe1e7;
-  --tooltip: #2e1f2b;
-  --on-tooltip: #fff7fb;
-  --shadow-color: 330 40% 40%;
+  --mic-1: #2b6fd6;
+  --mic-2: #164a99;
+  --open: #9a5208;
+  --open-bg: #fdecd6;
+  --closed: #1f6b45;
+  --closed-bg: #dcf1e5;
+  --danger: #c0283d;
+  --danger-bg: #fde3e7;
+  --tooltip: #0f1b2d;
+  --on-tooltip: #f4f7fb;
+  --shadow-color: 215 45% 30%;
   color-scheme: light;
 }
 
 .dark {
-  --bg: #1e121f;
-  --glow-1: #3b1d36;
-  --glow-2: #2a1d3d;
-  --surface: #2a1a2c;
-  --surface-2: #342236;
-  --surface-pink: #44233f;
-  --line: #3e2b40;
-  --line-strong: #5a4058;
-  --ink: #f8edf3;
-  --ink-2: #dac5d1;
-  --ink-3: #a991a1;
-  --berry: #f19bc6;
-  --berry-strong: #f7b8d7;
-  --berry-soft: #6a3559;
-  --berry-tint: #4c2545;
-  --on-berry: #3a102f;
-  --mic-1: #f6afd1;
-  --mic-2: #e07fb0;
-  --open: #f3b77f;
-  --open-bg: #4a3020;
-  --closed: #93d6aa;
-  --closed-bg: #1f3f2c;
-  --danger: #ff9aae;
-  --danger-bg: #4d1e2b;
-  --tooltip: #fbeaf3;
-  --on-tooltip: #2a1a25;
-  --shadow-color: 320 60% 3%;
+  --bg: #0b1220;
+  --glow-1: #11233f;
+  --glow-2: #0e1b31;
+  --surface: #121c2c;
+  --surface-2: #192536;
+  --surface-pink: #172d4c; /* tinted tile (deep blue) */
+  --line: #233247;
+  --line-strong: #33465f;
+  --ink: #e8eef7;
+  --ink-2: #b7c3d4;
+  --ink-3: #8a98ad;
+  --berry: #6aa6ff;
+  --berry-strong: #9cc4ff;
+  --berry-soft: #24426e;
+  --berry-tint: #1b3459;
+  --on-berry: #071225;
+  --mic-1: #5d9cff;
+  --mic-2: #2c6ad6;
+  --open: #f5b56f;
+  --open-bg: #3a2915;
+  --closed: #7cd3a0;
+  --closed-bg: #133222;
+  --danger: #ff8597;
+  --danger-bg: #3e1720;
+  --tooltip: #e8eef7;
+  --on-tooltip: #0b1220;
+  --shadow-color: 222 70% 2%;
   color-scheme: dark;
 }
 

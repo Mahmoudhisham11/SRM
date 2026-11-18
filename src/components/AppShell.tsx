@@ -7,7 +7,7 @@ import { motion } from "motion/react";
 import { ChartColumn, ChevronLeft, ChevronRight, ClipboardList, HandCoins, LogOut, Mic, Search, Settings, Store, WifiOff } from "lucide-react";
 import { useData } from "./providers/DataProvider";
 import { AuthScreen } from "./auth/AuthScreens";
-import { FlowerMark, LangToggle, Logo, Monogram, Sheet } from "./ui";
+import { BrandLogo, LangToggle, Logo, Monogram, Sheet } from "./ui";
 import { useI18n } from "@/lib/i18n/useI18n";
 import { useGreetingName, useOnline, pressMic } from "@/hooks/useAppChrome";
 import { useVendors } from "@/hooks/useCollections";
@@ -23,10 +23,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function Splash() {
   return (
-    <div className="flex min-h-dvh items-center justify-center text-berry" role="status" aria-label="Loading">
-      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 6, ease: "linear" }}>
-        <FlowerMark className="h-12 w-12" />
-      </motion.div>
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-6" role="status" aria-label="Loading">
+      <BrandLogo className="h-16" />
+      <motion.span
+        className="h-1 w-24 overflow-hidden rounded-full bg-berry-tint"
+        aria-hidden
+      >
+        <motion.span
+          className="block h-full w-1/3 rounded-full bg-berry"
+          animate={{ x: ["-100%", "300%"] }}
+          transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+        />
+      </motion.span>
     </div>
   );
 }

@@ -359,7 +359,7 @@ export const MESSAGES = {
   "settings.language": { ar: "اللغة", en: "Language" },
   "settings.theme": { ar: "الشكل", en: "Appearance" },
   "settings.theme.light": { ar: "فاتح", en: "Light" },
-  "settings.theme.evening": { ar: "مسائي", en: "Evening" },
+  "settings.theme.evening": { ar: "الوضع الداكن", en: "Dark mode" },
   "settings.theme.system": { ar: "تلقائي", en: "Auto" },
   "settings.address": { ar: "صيغة المخاطبة", en: "Arabic form of address" },
   "settings.address.f": { ar: "مؤنث — «قولي»", en: "Feminine — «قولي»" },
