@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { AudioLines, Check, Keyboard, NotebookPen, X } from "lucide-react";
 import { useRepo } from "@/components/providers/DataProvider";
 import { useToast } from "@/components/providers/ToastProvider";
-import { Segmented, Slotted } from "@/components/ui";
+import { Button, Segmented, Slotted } from "@/components/ui";
 import { CaseCard } from "@/components/cases/CaseCard";
 import { NotebookCard } from "@/components/home/NotebookCard";
 import { FieldMic, useSpeechSupported } from "./FieldMic";
@@ -69,6 +69,9 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
   const ctx = useMemo(() => ({ defaultYear: year }), [year]);
 
   const [open, setOpen] = useState(false);
+  /** Logging by keyboard instead of voice (the user can switch either way at any time). */
+  const [typing, setTyping] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
   const [heard, setHeard] = useState("");
@@ -341,9 +344,11 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
     recorder.current?.resume();
   }, [dictation, notify, releaseAudio, setRecordAudio, t, bump]);
 
-  const startSession = useCallback(async () => {
+  const startSession = useCallback(async (opts?: { typing?: boolean }) => {
     setOpen(true);
-    if (!supported) return;
+    const typed = opts?.typing === true || !supported;
+    setTyping(typed);
+    if (typed) return;
     // Listening must not wait on the recorder's mic permission / start-up.
     listen();
     void startClip();
@@ -377,11 +382,36 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
     setErrors({});
   }
 
-  // The shell's center mic: start here, or pause/resume if already logging.
+  /** Switch between dictating and typing without losing what's in the fields. */
+  const switchEntry = useCallback(
+    (next: "voice" | "typing") => {
+      if (next === "typing") {
+        speech.current?.stop();
+        setTyping(true);
+        return;
+      }
+      setTyping(false);
+      if (supported && !speech.current) {
+        if (recordAudio && !recorder.current?.active) void startClip();
+        listen();
+      }
+    },
+    [supported, recordAudio, startClip, listen],
+  );
+
+  // Typing: put the caret in the first field when typing starts and after each save.
+  useEffect(() => {
+    if (!open || !typing) return;
+    const id = requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>("[data-field-input]")?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open, typing, sessionIds.length]);
+
+  // The shell's center mic: start here, switch back to voice, or pause/resume if already logging.
   const onShellMic = useCallback(() => {
     if (!open) void startSession();
+    else if (typing) switchEntry("voice");
     else if (supported) toggleListening();
-  }, [open, startSession, toggleListening, supported]);
+  }, [open, startSession, toggleListening, supported, typing, switchEntry]);
   useClaimMic(onShellMic);
 
   const autoStarted = useRef(false);
@@ -401,23 +431,23 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
     [],
   );
 
-  // Keyboard: Ctrl/Cmd+Enter saves; Space toggles the mic (outside text fields).
+  // Keyboard: Ctrl/Cmd+Enter saves; Space toggles the mic (outside text fields, and not while logging by typing).
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      const typing = el.closest("input,textarea,select,[contenteditable]");
+      const inField = el.closest("input,textarea,select,[contenteditable]");
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         save();
-      } else if (e.code === "Space" && !typing && !el.closest("button,a") && supported) {
+      } else if (e.code === "Space" && !typing && !inField && !el.closest("button,a") && supported) {
         e.preventDefault();
         toggleListening();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, save, toggleListening, supported]);
+  }, [open, save, toggleListening, supported, typing]);
 
   // Compact header once the big mic scrolls away.
   useEffect(() => {
@@ -444,11 +474,11 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
       <section className="flex flex-col items-center gap-4 py-6 text-center">
         {!supported && <UnsupportedNotice />}
         {supported ? (
-          <MicOrb state="idle" level={level} onPress={startSession} label={t("voice.start")} />
+          <MicOrb state="idle" level={level} onPress={() => void startSession()} label={t("voice.start")} />
         ) : (
           <motion.button
             type="button"
-            onClick={startSession}
+            onClick={() => void startSession({ typing: true })}
             whileTap={{ scale: 0.94 }}
             className="flex h-28 w-28 items-center justify-center rounded-full bg-gradient-to-br from-[var(--mic-1)] to-[var(--mic-2)] text-on-berry shadow-[var(--shadow-mic)]"
             aria-label={t("vendor.typeInstead")}
@@ -457,19 +487,30 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
           </motion.button>
         )}
         <p className="text-sm font-semibold text-ink-2">{supported ? t("vendor.tapAndSpeak") : t("vendor.typeInstead")}</p>
+        {supported && (
+          <Button variant="outline" onClick={() => void startSession({ typing: true })}>
+            <Keyboard className="h-4 w-4" />
+            {t("vendor.orType")}
+          </Button>
+        )}
       </section>
     );
   }
 
-  const promptText =
-    mode === "free" ? t("voice.prompt.free") : field ? t(PROMPT_KEYS[field], { field: "{field}" }) : t("voice.prompt.review");
-  const promptSub = mode === "free" ? t("voice.sub.free") : field ? t(`voice.sub.${field}` as MessageKey) : "";
+  const promptText = typing
+    ? t("entry.title")
+    : mode === "free"
+      ? t("voice.prompt.free")
+      : field
+        ? t(PROMPT_KEYS[field], { field: "{field}" })
+        : t("voice.prompt.review");
+  const promptSub = typing ? t("entry.sub") : mode === "free" ? t("voice.sub.free") : field ? t(`voice.sub.${field}` as MessageKey) : "";
 
   return (
     <section className="flex flex-col gap-5">
       {/* Compact sticky header (scrolled past the big mic) */}
       <AnimatePresence>
-        {!micInView && (
+        {!micInView && !typing && (
           <motion.div
             initial={{ y: -80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -491,6 +532,19 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
 
       {/* Settings row */}
       <div className="flex flex-wrap items-center gap-2">
+        {supported && (
+          <Segmented<"voice" | "typing">
+            size="sm"
+            label={t("entry.aria")}
+            value={typing ? "typing" : "voice"}
+            onChange={switchEntry}
+            options={[
+              { value: "voice", label: t("entry.voice") },
+              { value: "typing", label: t("entry.typing") },
+            ]}
+          />
+        )}
+        {!typing && (
         <Segmented<VoiceMode>
           size="sm"
           label={t("voice.mode.aria")}
@@ -505,6 +559,7 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
             { value: "free", label: t("voice.mode.free") },
           ]}
         />
+        )}
         <label className="relative flex h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-sm font-bold">
           <NotebookPen className="h-4 w-4 text-ink-3" aria-hidden />
           <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label={t("voice.year.aria")} className="appearance-none bg-transparent pe-1 focus:outline-none">
@@ -515,7 +570,7 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
             ))}
           </select>
         </label>
-        {supported && audioAvailable && (
+        {supported && audioAvailable && !typing && (
           <button
             type="button"
             role="switch"
@@ -555,7 +610,7 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
       <div className="text-center">
         <AnimatePresence mode="wait" initial={false}>
           <motion.h2
-            key={`${mode}-${g.step}-${isAr}`}
+            key={`${typing ? "typing" : mode}-${typing ? 0 : g.step}-${isAr}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -568,7 +623,7 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
         {promptSub && <p className="mt-1 text-sm text-ink-3">{promptSub}</p>}
       </div>
 
-      {supported && (
+      {supported && !typing && (
         <div ref={micRef} className="flex flex-col items-center gap-9 pb-2 pt-9">
           <div className="relative">
             <MicOrb state={micState} level={level} onPress={toggleListening} label={listening ? t("voice.pause") : t("voice.resume")} />
@@ -577,18 +632,19 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
           <p className={`text-sm font-bold ${listening ? "text-berry" : "text-ink-3"}`}>{listening ? t("voice.listening") : t("voice.paused")}</p>
         </div>
       )}
-      {!supported && (
+      {(!supported || typing) && (
         <div ref={micRef} className="relative h-2">
           <SaveBurst id={burst.id} big={burst.big} />
         </div>
       )}
 
-      {supported && (
+      {supported && !typing && (
         <TranscriptBox finalText={mode === "free" ? freeText : heard} interim={interim} placeholder={t("voice.heardPlaceholder")} />
       )}
 
-      <CommandChips commands={mode === "guided" ? GUIDED_CMDS : FREE_CMDS} flash={flash} onCommand={runCommand} />
+      {!typing && <CommandChips commands={mode === "guided" ? GUIDED_CMDS : FREE_CMDS} flash={flash} onCommand={runCommand} />}
 
+      <div ref={panelRef}>
       <FieldsPanel
         values={g.values}
         step={mode === "guided" ? g.step : null}
@@ -602,6 +658,11 @@ export function VoiceLogger({ vendor, autoStart = false }: { vendor: Vendor; aut
         }}
         onEnter={() => (g.step >= REVIEW_STEP - 1 ? save() : runCommand("next"))}
       />
+      </div>
+      <Button size="lg" className="w-full" onClick={save} disabled={busy}>
+        <Check className="h-5 w-5" />
+        {t("entry.save")}
+      </Button>
       {busy && <p className="text-center text-sm text-ink-3">…</p>}
       <p className="hidden text-center text-xs text-ink-3 lg:block">{t("voice.shortcuts")}</p>
 

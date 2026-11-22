@@ -170,6 +170,14 @@ function FieldCard({
           value={value}
           onFocus={onSelect}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter = next / save, like the other fields; Shift+Enter adds a line.
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              onEnter();
+            }
+          }}
+          enterKeyHint="done"
           className="w-full resize-none rounded-xl bg-transparent px-1 text-lg leading-relaxed focus:bg-surface-2 focus:outline-none"
         />
       ) : (

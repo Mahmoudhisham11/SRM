@@ -181,6 +181,12 @@ If something is missing, for example a Start Date, the parsed fields stay on scr
 
 Set **السنة الافتراضية** to the notebook's year. It stays set for this browser session only, so it won't leak into tomorrow's normal logging. Use guided mode and keep going case after case with «حفظ».
 
+### Typing instead of speaking
+
+On a vendor page, tap **«أو اكتبي الحالة بإيدك»** under the mic to log by keyboard. Inside a logging session, the **«🎙 صوت | ⌨ كتابة»** toggle switches between the two at any time, and what's already in the fields is kept.
+
+In typing mode the mic, prompts and command chips are hidden. The caret starts in **Case**, **Enter** moves to the next field, and Enter on **Comments** saves (Shift+Enter adds a line). After each save, the caret returns to Case for the next one. **«حفظ الحالة»** saves in both modes.
+
 ### Keyboard
 
 Every field is a normal input. In guided mode, **Enter** moves to the next field, and Enter on the last field saves. **Ctrl/⌘+Enter** saves from anywhere, and **Space** pauses or resumes the mic. Date fields also have a calendar picker.
