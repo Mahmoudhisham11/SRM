@@ -198,6 +198,13 @@ export const MESSAGES = {
 
   // --- vendor page ---------------------------------------------------------------
   "vendor.tapAndSpeak": { ar: g("اضغطي واتكلمي", "اضغط واتكلم"), en: "Tap and speak" },
+  "vendor.orType": { ar: g("أو اكتبي الحالة بإيدك", "أو اكتب الحالة بإيدك"), en: "Or type the case" },
+  "entry.aria": { ar: "طريقة التسجيل", en: "How to log" },
+  "entry.voice": { ar: "🎙 صوت", en: "🎙 Voice" },
+  "entry.typing": { ar: "⌨ كتابة", en: "⌨ Typing" },
+  "entry.title": { ar: g("اكتبي بيانات الحالة", "اكتب بيانات الحالة"), en: "Type the case" },
+  "entry.sub": { ar: "Enter بينقلك للخانة اللي بعدها، وفي آخر خانة بيحفظ", en: "Enter moves to the next field; on the last one it saves" },
+  "entry.save": { ar: "حفظ الحالة", en: "Save case" },
   "vendor.typeInstead": { ar: g("اضغطي وابدئي بالكتابة", "اضغط وابدأ بالكتابة"), en: "Tap to start typing" },
   "cases.search": { ar: g("دوّري في الحالات", "دوّر في الحالات"), en: "Search cases" },
   "cases.all": { ar: "الكل", en: "All" },
