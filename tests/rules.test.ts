@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc, type Firestore } from "firebase/firestore";
 import { ref, uploadBytes, getBytes } from "firebase/storage";
+import { toStored } from "../src/lib/dues/configStore";
 
 let env: RulesTestEnvironment;
 
@@ -71,7 +72,9 @@ describe("shared data", () => {
     await assertSucceeds(setDoc(doc(as("ann"), `${S}/vendors/v2`), older)); // vendors from before Material
   });
   it("shared settings: anyone signed in, nobody signed out", async () => {
-    await assertSucceeds(setDoc(doc(as("ann"), `${S}/settings/duesAnalysis`), { fixedVendors: ["1"] }));
+    // The real stored form of the Analysis lists (Firestore rejects nested arrays).
+    const lists = toStored({ version: 1, fixedVendors: ["1"], excludedVendors: [], masaderVendors: ["1138"], exceptions: { "226|INV/1|10.00": "none" }, vendorNames: { "1": "A" } });
+    await assertSucceeds(setDoc(doc(as("ann"), `${S}/settings/duesAnalysis`), lists));
     await assertSucceeds(getDoc(doc(as("bob"), `${S}/settings/duesAnalysis`)));
     await assertFails(getDoc(doc(anon(), `${S}/settings/duesAnalysis`)));
   });

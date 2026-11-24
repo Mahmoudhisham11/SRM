@@ -11,7 +11,7 @@ import { todayISO, formatDMY } from "@/lib/dates";
 import { downloadBlob } from "@/lib/export/exportRows";
 import { DuesFormatError, cellNumber, statusReportFileName } from "@/lib/dues/statusReport";
 import { AnalysisFormatError, ANALYSIS_SHEETS, type Analysis, type AnalysisConfig } from "@/lib/dues/analysis";
-import { useDuesConfig } from "@/hooks/useDuesConfig";
+import { useDuesConfig, type SharedProblem } from "@/hooks/useDuesConfig";
 
 const fmtMoney = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -27,7 +27,7 @@ type Stage = { kind: "idle" } | { kind: "working" } | { kind: "done"; analysis: 
 export function DuesPage() {
   const { t } = useI18n();
   const { notify, errorText } = useToast();
-  const { config, source, sharedBlocked, demo, save } = useDuesConfig();
+  const { config, source, problem, demo, save } = useDuesConfig();
   const input = useRef<HTMLInputElement>(null);
   const learnInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<Upload | null>(null);
@@ -119,7 +119,7 @@ export function DuesPage() {
       <DesktopHeader title={t("dues.title")} />
       <p className="max-w-2xl text-sm text-ink-2">{t("dues.intro")}</p>
 
-      <ListsCard config={config} source={demo ? "shared" : source} sharedBlocked={sharedBlocked} learning={learning} onLearn={() => learnInput.current?.click()} onChange={updateConfig} />
+      <ListsCard config={config} source={source} demo={demo} problem={problem} learning={learning} onLearn={() => learnInput.current?.click()} onChange={updateConfig} />
       <input ref={learnInput} type="file" accept=".xlsx" className="hidden" onChange={(e) => learn(e.target.files?.[0])} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -192,14 +192,16 @@ function Notice({ tone, children }: { tone: "warn" | "error"; children: ReactNod
 function ListsCard({
   config,
   source,
-  sharedBlocked,
+  demo,
+  problem,
   learning,
   onLearn,
   onChange,
 }: {
   config: AnalysisConfig | null;
   source: string;
-  sharedBlocked: boolean;
+  demo: boolean;
+  problem: SharedProblem;
   learning: boolean;
   onLearn: () => void;
   onChange: (c: AnalysisConfig) => void;
@@ -278,7 +280,14 @@ function ListsCard({
           {exceptions > 0 && <p className="text-xs text-ink-3">{t("dues.lists.exceptionsNote", { n: exceptions })}</p>}
         </div>
       )}
-      {(sharedBlocked || source === "device") && <p className="rounded-xl bg-open-bg px-3 py-2 text-xs text-ink">{t("dues.lists.deviceOnly")}</p>}
+      {!demo && problem?.kind === "rules" && <p className="rounded-xl bg-open-bg px-3 py-2 text-xs text-ink">{t("dues.lists.deviceOnly")}</p>}
+      {!demo && problem?.kind === "other" && <p className="rounded-xl bg-open-bg px-3 py-2 text-xs text-ink">{t("dues.lists.syncError", { code: problem.code })}</p>}
+      {!demo && !problem && source === "shared" && (
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-closed">
+          <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+          {t("dues.lists.shared")}
+        </p>
+      )}
     </section>
   );
 }
