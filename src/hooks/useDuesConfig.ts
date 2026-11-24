@@ -1,41 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useData } from "@/components/providers/DataProvider";
 import { getFirebase } from "@/lib/firebase";
 import { ROOT, SHARED } from "@/lib/data/firestoreRepo";
-import { EMPTY_CONFIG, type AnalysisConfig, type Placement } from "@/lib/dues/analysis";
+import { EMPTY_CONFIG, type AnalysisConfig } from "@/lib/dues/analysis";
+import { fromStored, toStored } from "@/lib/dues/configStore";
 
 /**
  * The Analysis lists (fixed / excluded / Masader vendors + per-invoice
- * decisions). Shared through Firestore (srmVoiceLog/shared/settings/duesAnalysis)
- * so everyone gets the same Analysis; kept on this device too, so the page
- * works offline and even before the Firestore rules allow the settings doc.
+ * decisions), shared by everyone through Firestore
+ * (srmVoiceLog/shared/settings/duesAnalysis): upload them once on any device
+ * and every other device gets them. A copy is kept on the device so the page
+ * also works offline.
+ *
+ * If a device has lists that the shared copy doesn't (e.g. learned before
+ * sharing worked), they're uploaded automatically.
  */
 const LOCAL_KEY = "srm-voice-log:dues-analysis-config:v1";
-
-/** Stored form: exceptions as pairs (invoice numbers can contain characters Firestore field names dislike). */
-interface StoredConfig extends Omit<AnalysisConfig, "exceptions"> {
-  exceptionList: Array<[string, Placement]>;
-}
-
-const toStored = (c: AnalysisConfig): StoredConfig => {
-  const { exceptions, ...rest } = c;
-  return { ...rest, exceptionList: Object.entries(exceptions) };
-};
-const fromStored = (s: Partial<StoredConfig> | undefined | null): AnalysisConfig | null => {
-  if (!s || !Array.isArray(s.fixedVendors)) return null;
-  return {
-    version: 1,
-    fixedVendors: s.fixedVendors ?? [],
-    excludedVendors: s.excludedVendors ?? [],
-    masaderVendors: s.masaderVendors ?? [],
-    exceptions: Object.fromEntries(s.exceptionList ?? []),
-    vendorNames: s.vendorNames ?? {},
-    learnedFrom: s.learnedFrom,
-    learnedAt: s.learnedAt,
-  };
-};
 
 function readLocal(): AnalysisConfig | null {
   try {
@@ -54,13 +36,23 @@ function writeLocal(c: AnalysisConfig) {
 }
 
 export type ConfigSource = "loading" | "shared" | "device" | "none";
+/** Why the shared copy can't be used: the rules don't allow it, or another error (code). */
+export type SharedProblem = null | { kind: "rules" } | { kind: "other"; code: string };
+
+const errCode = (e: unknown) => String((e as { code?: string })?.code ?? (e as Error)?.message ?? e);
+const problemOf = (e: unknown): SharedProblem => (/permission-denied/.test(errCode(e)) ? { kind: "rules" } : { kind: "other", code: errCode(e).slice(0, 80) });
+
+async function writeShared(c: AnalysisConfig) {
+  const { doc, setDoc } = await import("firebase/firestore");
+  await setDoc(doc(getFirebase().db, ROOT, SHARED, "settings", "duesAnalysis"), { ...toStored(c), updatedAt: Date.now() });
+}
 
 export function useDuesConfig() {
   const { auth, demo } = useData();
   const [config, setConfig] = useState<AnalysisConfig | null>(null);
   const [source, setSource] = useState<ConfigSource>("loading");
-  /** True when the last save couldn't reach the shared copy (rules not updated yet). */
-  const [sharedBlocked, setSharedBlocked] = useState(false);
+  const [problem, setProblem] = useState<SharedProblem>(null);
+  const uploading = useRef(false);
   const signedIn = auth.status === "signedIn";
 
   useEffect(() => {
@@ -78,19 +70,27 @@ export function useDuesConfig() {
       unsub = onSnapshot(
         doc(getFirebase().db, ROOT, SHARED, "settings", "duesAnalysis"),
         (snap) => {
-          const shared = snap.exists() ? fromStored(snap.data() as Partial<StoredConfig>) : null;
+          const shared = snap.exists() ? fromStored(snap.data()) : null;
           if (shared) {
             setConfig(shared);
             setSource("shared");
+            setProblem(null);
             writeLocal(shared);
-          } else {
-            setConfig(local);
-            setSource(local ? "device" : "none");
+            return;
+          }
+          // Nothing shared yet: show this device's lists and share them.
+          setConfig(local);
+          setSource(local ? "device" : "none");
+          if (local && !uploading.current && !snap.metadata.fromCache) {
+            uploading.current = true;
+            writeShared(local)
+              .then(() => setProblem(null))
+              .catch((e) => setProblem(problemOf(e)))
+              .finally(() => (uploading.current = false));
           }
         },
-        () => {
-          // No access to the shared copy (rules not published yet): use this device's copy.
-          setSharedBlocked(true);
+        (e) => {
+          setProblem(problemOf(e));
           setConfig(local);
           setSource(local ? "device" : "none");
         },
@@ -111,17 +111,16 @@ export function useDuesConfig() {
         return;
       }
       try {
-        const { doc, setDoc } = await import("firebase/firestore");
-        await setDoc(doc(getFirebase().db, ROOT, SHARED, "settings", "duesAnalysis"), { ...toStored(next), updatedAt: Date.now() });
-        setSharedBlocked(false);
+        await writeShared(next);
+        setProblem(null);
         setSource("shared");
-      } catch {
-        setSharedBlocked(true);
+      } catch (e) {
+        setProblem(problemOf(e));
         setSource("device");
       }
     },
     [demo, signedIn],
   );
 
-  return { config, source, sharedBlocked: sharedBlocked && !demo, demo, save, empty: EMPTY_CONFIG };
+  return { config, source, problem: demo ? null : problem, demo, save, empty: EMPTY_CONFIG };
 }
